@@ -1,0 +1,5 @@
+{
+  "API_BASE_URL": "https://container-2m65.onrender.com/api",
+  "SHOP_ID": "13",
+  "AUTH_TOKEN": "<YOUR_AUTH_TOKEN_HERE>"
+}
