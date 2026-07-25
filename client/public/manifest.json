@@ -4,7 +4,7 @@
   "description": "Upload, print, and deliver documents across campus. Students, shops, and agents — all connected in one premium platform.",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#050510",
   "theme_color": "#050510",
   "scope": "/",
