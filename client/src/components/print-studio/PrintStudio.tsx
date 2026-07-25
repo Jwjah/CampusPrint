@@ -75,7 +75,7 @@ export default function PrintStudio() {
           const state = await AutosaveEngine.loadState(targetDocId);
           if (state.document && state.bytes) {
             DocumentEngine.setDocument(state.document);
-            if (state.workspace) {
+            if (state.workspace && state.workspace.activePageId) {
               WorkspaceEngine.setActivePage(state.workspace.activePageId);
             } else if (state.document.pages.length > 0) {
               WorkspaceEngine.setActivePage(state.document.pages[0].id);

@@ -1,7 +1,7 @@
 import { PDFDocument } from 'pdf-lib';
 import { generateId } from './uuid';
 import { DocumentModel } from '../models/DocumentModel';
-import { WorkspaceModel } from '../models/WorkspaceModel';
+import { WorkspaceModel, defaultWorkspaceModel } from '../models/WorkspaceModel';
 import { AutosaveEngine } from '../engines/AutosaveEngine';
 import { DocumentEngine } from '../engines/DocumentEngine';
 import { WorkspaceEngine } from '../engines/WorkspaceEngine';
@@ -56,12 +56,8 @@ export async function createDocumentFromFile(file: File): Promise<string> {
   };
 
   const initialWorkspace: WorkspaceModel = {
-    activePageId: newDoc.pages.length > 0 ? newDoc.pages[0].id : '',
-    zoom: 1,
-    activeToolId: 'select',
-    sidebarOpen: true,
-    propertiesOpen: true,
-    isPreviewMode: false
+    ...defaultWorkspaceModel,
+    activePageId: newDoc.pages.length > 0 ? newDoc.pages[0].id : null,
   };
 
   // Save to IDB via AutosaveEngine
