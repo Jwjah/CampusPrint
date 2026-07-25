@@ -9,9 +9,10 @@ import FabricOverlay from './FabricOverlay';
 interface PageContainerProps {
   pageId: string;
   pageNumber: number;
+  isMobile?: boolean;
 }
 
-export default function PageContainer({ pageId, pageNumber }: PageContainerProps) {
+export default function PageContainer({ pageId, pageNumber, isMobile }: PageContainerProps) {
   const workspace = useWorkspace();
   const doc = useDocument();
   const [pageDimensions, setPageDimensions] = useState<{ width: number, height: number } | null>(null);
@@ -55,8 +56,18 @@ export default function PageContainer({ pageId, pageNumber }: PageContainerProps
         renderAnnotationLayer={false}
         onLoadSuccess={(page) => {
           setPageDimensions({ width: page.originalWidth, height: page.originalHeight });
+          
+          // Auto-fit to mobile viewport width (with some padding)
+          if (isMobile && pageNumber === 1) {
+            const availableWidth = window.innerWidth - 32; // 16px padding on each side
+            if (page.originalWidth > availableWidth) {
+              const newZoom = availableWidth / page.originalWidth;
+              // Set zoom slightly smaller than exact fit
+              WorkspaceEngine.setZoom(newZoom * 0.95);
+            }
+          }
         }}
-        loading={<div className="bg-bg-tertiary animate-pulse w-full h-full min-h-[800px] min-w-[600px]" />}
+        loading={<div className="bg-bg-tertiary animate-pulse w-full h-full min-h-[400px] min-w-[300px]" />}
       />
 
       {pageDimensions && (

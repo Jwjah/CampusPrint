@@ -91,7 +91,11 @@ class AutosaveEngineClass implements IEngine {
 
   public async saveOriginalPDF(docId: string, bytes: Uint8Array) {
     if (!this.db) return;
-    await this.db.put(STORE_ORIGINALS, { id: docId, bytes });
+    try {
+      await this.db.put(STORE_ORIGINALS, { id: docId, bytes });
+    } catch (err) {
+      console.warn('[AutosaveEngine] Failed to save original PDF to IndexedDB:', err);
+    }
   }
 
   public async loadState(docId: string): Promise<{ document?: DocumentModel, workspace?: WorkspaceModel, bytes?: Uint8Array }> {

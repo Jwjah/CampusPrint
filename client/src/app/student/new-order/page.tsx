@@ -236,7 +236,20 @@ export default function NewOrderPage() {
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {(file.type.includes('pdf') || file.type.includes('image')) && (
-                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => router.push('/print-studio')} className="btn btn-ghost btn-icon" style={{ color: 'var(--primary)', padding: 4 }}>
+                          <motion.button 
+                            whileHover={{ scale: 1.1 }} 
+                            whileTap={{ scale: 0.9 }} 
+                            onClick={async () => {
+                              try {
+                                const { createDocumentFromFile } = await import('@/utils/documentHelper');
+                                const docId = await createDocumentFromFile(file as File);
+                                router.push(`/print-studio?docId=${docId}`);
+                              } catch (err) {
+                                console.error('Failed to transfer to print studio:', err);
+                                toast.error('Failed to open Print Studio');
+                              }
+                            }} 
+                            className="btn btn-ghost btn-icon" style={{ color: 'var(--primary)', padding: 4 }}>
                             <HiOutlinePencilAlt size={18} />
                           </motion.button>
                         )}
