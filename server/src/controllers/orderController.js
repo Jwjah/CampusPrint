@@ -764,12 +764,19 @@ exports.downloadPrintPdf = async (req, res) => {
       return res.send(pdfBuffer);
     }
     
-    // Parse pages per sheet from notes format: e.g. "[Format: A4, portrait, 2 pg/sheet, Binding: none]"
+    // Parse pages per sheet and orientation from notes format: e.g. "[Format: A4, portrait, 2 pg/sheet, Binding: none]"
     let pagesPerSheet = 1;
-    if (file.notes && file.notes.includes('pg/sheet')) {
-      const match = file.notes.match(/(\d+)\s*pg\/sheet/);
-      if (match) {
-        pagesPerSheet = parseInt(match[1], 10);
+    let orientation = 'portrait';
+    if (file.notes) {
+      if (file.notes.includes('pg/sheet')) {
+        const match = file.notes.match(/(\d+)\s*pg\/sheet/);
+        if (match) {
+          pagesPerSheet = parseInt(match[1], 10);
+        }
+      }
+      const matchOri = file.notes.match(/\[Format:.*?, (portrait|landscape),/i);
+      if (matchOri) {
+        orientation = matchOri[1].toLowerCase();
       }
     }
     
@@ -785,7 +792,8 @@ exports.downloadPrintPdf = async (req, res) => {
         file.delivery_qr,
         file.print_type,
         pagesPerSheet,
-        file.order_id
+        file.order_id,
+        orientation
       );
     } catch (processErr) {
       console.error('PDF modifications failed, sending original:', processErr.message);

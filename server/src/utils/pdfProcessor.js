@@ -436,7 +436,7 @@ class FooterRenderer {
  * on the last page. All positions and scaling are derived dynamically from the printer profile.
  * Supports 1-up, 2-up (vertical stack), and 4-up (2x2 grid) formatting in a single pass.
  */
-async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw', pagesPerSheet = 1, orderIdStr = null) {
+async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw', pagesPerSheet = 1, orderIdStr = null, orientation = 'portrait') {
   try {
     const srcDoc = await PDFDocument.load(pdfBuffer);
     const srcPages = srcDoc.getPages();
@@ -456,14 +456,17 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
       numSheets = Math.ceil(numPages / 4);
     }
     
-    console.log(`[PDF PROCESSOR] Starting conversion: A4 output, ${pagesPerSheet} pages per sheet, total sheets: ${numSheets}`);
+    const pageWidth = orientation === 'landscape' ? A4_HEIGHT : A4_WIDTH;
+    const pageHeight = orientation === 'landscape' ? A4_WIDTH : A4_HEIGHT;
+    
+    console.log(`[PDF PROCESSOR] Starting conversion: ${orientation} output, ${pagesPerSheet} pages per sheet, total sheets: ${numSheets}`);
     
     for (let s = 0; s < numSheets; s++) {
-      const newPage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+      const newPage = pdfDoc.addPage([pageWidth, pageHeight]);
       const isLastSheet = (s === numSheets - 1);
       
       const bottomReserve = isLastSheet ? RESERVED_SPACE : 0;
-      const availableHeight = A4_HEIGHT - bottomReserve;
+      const availableHeight = pageHeight - bottomReserve;
       
       if (pagesPerSheet === 1) {
         const page = srcPages[s];
@@ -473,95 +476,120 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
         const originalHeight = height;
         
         const isLetter = Math.abs(originalWidth - 612) < 5 && Math.abs(originalHeight - 792) < 5;
-        const isA4 = Math.abs(originalWidth - A4_WIDTH) < 5 && Math.abs(originalHeight - A4_HEIGHT) < 5;
-        const detectedPaper = isA4 ? 'A4' : (isLetter ? 'Letter' : 'Custom');
+        const isA4 = Math.abs(originalWidth - pageWidth) < 5 && Math.abs(originalHeight - pageHeight) < 5;
+        const detectedPaper = isA4 ? (orientation === 'landscape' ? 'A4 Landscape' : 'A4 Portrait') : (isLetter ? 'Letter' : 'Custom');
         
         const [embedded] = await pdfDoc.embedPages([page]);
+        
+        // Scale proportionally to fit within the available bounds while maximizing size
+        const scaleX = pageWidth / originalWidth;
+        const scaleY = availableHeight / originalHeight;
+        const scale = Math.min(scaleX, scaleY);
+        
+        const drawW = originalWidth * scale;
+        const drawH = originalHeight * scale;
+        const drawX = (pageWidth - drawW) / 2;
+        const drawY = bottomReserve + (availableHeight - drawH) / 2;
+
         newPage.drawPage(embedded, {
-          x: 0,
-          y: bottomReserve,
-          width: A4_WIDTH,
-          height: availableHeight,
+          x: drawX,
+          y: drawY,
+          width: drawW,
+          height: drawH,
         });
         
         if (isLastSheet) {
           console.log(`[PDF PROCESSOR LOG] Page Conversion - Sheet #${s + 1} (Last Page):`);
           console.log(`  - Original Page size: ${originalWidth.toFixed(2)} x ${originalHeight.toFixed(2)} pt (${detectedPaper})`);
-          console.log(`  - New Page size: ${A4_WIDTH} x ${A4_HEIGHT} pt (A4)`);
+          console.log(`  - New Page size: ${pageWidth.toFixed(2)} x ${pageHeight.toFixed(2)} pt`);
           console.log(`  - Footer Y Coordinate (Bottom Y): ${FOOTER_BOTTOM_Y.toFixed(2)} pt (${(FOOTER_BOTTOM_Y / MM_TO_PT).toFixed(2)} mm)`);
           console.log(`  - Remaining bottom whitespace: ${(FOOTER_BOTTOM_Y / MM_TO_PT).toFixed(2)} mm`);
         } else {
           console.log(`[PDF PROCESSOR LOG] Page Conversion - Sheet #${s + 1}:`);
           console.log(`  - Original Page size: ${originalWidth.toFixed(2)} x ${originalHeight.toFixed(2)} pt (${detectedPaper})`);
-          console.log(`  - New Page size: ${A4_WIDTH} x ${A4_HEIGHT} pt (A4)`);
+          console.log(`  - New Page size: ${pageWidth.toFixed(2)} x ${pageHeight.toFixed(2)} pt`);
         }
       } else if (pagesPerSheet === 2) {
-        // 2-up: Portrait pages stacked vertically
-        const slotHeight = availableHeight / 2;
-        const yScale = slotHeight / A4_HEIGHT;
-        const xScale = yScale; // Keep 1:1 aspect ratio
-        const w = A4_WIDTH * xScale;
-        const dx = (A4_WIDTH - w) / 2; // Center horizontally
+        // 2-up: Side-by-side if landscape, stacked vertically if portrait
+        let isVerticalStack = orientation === 'portrait';
         
-        console.log(`[PDF PROCESSOR LOG] Sheet #${s + 1} (2-up): yOffset: ${bottomReserve.toFixed(2)}, slotHeight: ${slotHeight.toFixed(2)}, scale: ${xScale.toFixed(3)}`);
+        const slotWidth = isVerticalStack ? pageWidth : pageWidth / 2;
+        const slotHeight = isVerticalStack ? availableHeight / 2 : availableHeight;
         
-        // Bottom slot (Page s*2)
-        const pageIdx1 = s * 2;
-        if (pageIdx1 < numPages) {
-          const page1 = srcPages[pageIdx1];
-          const [embedded1] = await pdfDoc.embedPages([page1]);
-          newPage.drawPage(embedded1, {
-            x: dx,
-            y: bottomReserve,
-            xScale: xScale,
-            yScale: yScale,
-          });
-        }
+        console.log(`[PDF PROCESSOR LOG] Sheet #${s + 1} (2-up): slotWidth: ${slotWidth.toFixed(2)}, slotHeight: ${slotHeight.toFixed(2)}`);
         
-        // Top slot (Page s*2 + 1)
-        const pageIdx2 = s * 2 + 1;
-        if (pageIdx2 < numPages) {
-          const page2 = srcPages[pageIdx2];
-          const [embedded2] = await pdfDoc.embedPages([page2]);
-          newPage.drawPage(embedded2, {
-            x: dx,
-            y: bottomReserve + slotHeight,
-            xScale: xScale,
-            yScale: yScale,
-          });
-        }
-      } else if (pagesPerSheet === 4) {
-        // 4-up: 2x2 grid
-        const slotWidth = A4_WIDTH / 2;
-        const slotHeight = availableHeight / 2;
-        const yScale = slotHeight / A4_HEIGHT;
-        const xScale = yScale; // Keep 1:1 aspect ratio
-        const w = A4_WIDTH * xScale;
-        const dx = (slotWidth - w) / 2; // Center horizontally inside each slot
-        
-        console.log(`[PDF PROCESSOR LOG] Sheet #${s + 1} (4-up): yOffset: ${bottomReserve.toFixed(2)}, slotHeight: ${slotHeight.toFixed(2)}, scale: ${xScale.toFixed(3)}`);
-        
-        const drawSlot = async (pageIdx, xOffset, yOffset) => {
+        const drawSlot2Up = async (pageIdx, slotX, slotY) => {
           if (pageIdx < numPages) {
             const page = srcPages[pageIdx];
+            const { width: srcW, height: srcH } = page.getSize();
+            const scaleX = slotWidth / srcW;
+            const scaleY = slotHeight / srcH;
+            const scale = Math.min(scaleX, scaleY);
+            
+            const w = srcW * scale;
+            const h = srcH * scale;
+            const dx = slotX + (slotWidth - w) / 2;
+            const dy = slotY + (slotHeight - h) / 2;
+            
             const [embedded] = await pdfDoc.embedPages([page]);
             newPage.drawPage(embedded, {
-              x: xOffset + dx,
-              y: yOffset,
-              xScale: xScale,
-              yScale: yScale,
+              x: dx,
+              y: dy,
+              width: w,
+              height: h,
             });
           }
         };
         
-        // Bottom-Left (Slot 1)
-        await drawSlot(s * 4, 0, bottomReserve);
-        // Bottom-Right (Slot 2)
-        await drawSlot(s * 4 + 1, slotWidth, bottomReserve);
-        // Top-Left (Slot 3)
-        await drawSlot(s * 4 + 2, 0, bottomReserve + slotHeight);
-        // Top-Right (Slot 4)
-        await drawSlot(s * 4 + 3, slotWidth, bottomReserve + slotHeight);
+        if (isVerticalStack) {
+          // Bottom slot (Page s*2 + 1)
+          await drawSlot2Up(s * 2 + 1, 0, bottomReserve);
+          // Top slot (Page s*2)
+          await drawSlot2Up(s * 2, 0, bottomReserve + slotHeight);
+        } else {
+          // Left slot (Page s*2)
+          await drawSlot2Up(s * 2, 0, bottomReserve);
+          // Right slot (Page s*2 + 1)
+          await drawSlot2Up(s * 2 + 1, slotWidth, bottomReserve);
+        }
+      } else if (pagesPerSheet === 4) {
+        // 4-up: 2x2 grid
+        const slotWidth = pageWidth / 2;
+        const slotHeight = availableHeight / 2;
+        
+        console.log(`[PDF PROCESSOR LOG] Sheet #${s + 1} (4-up): slotWidth: ${slotWidth.toFixed(2)}, slotHeight: ${slotHeight.toFixed(2)}`);
+        
+        const drawSlot4Up = async (pageIdx, slotX, slotY) => {
+          if (pageIdx < numPages) {
+            const page = srcPages[pageIdx];
+            const { width: srcW, height: srcH } = page.getSize();
+            const scaleX = slotWidth / srcW;
+            const scaleY = slotHeight / srcH;
+            const scale = Math.min(scaleX, scaleY);
+            
+            const w = srcW * scale;
+            const h = srcH * scale;
+            const dx = slotX + (slotWidth - w) / 2;
+            const dy = slotY + (slotHeight - h) / 2;
+            
+            const [embedded] = await pdfDoc.embedPages([page]);
+            newPage.drawPage(embedded, {
+              x: dx,
+              y: dy,
+              width: w,
+              height: h,
+            });
+          }
+        };
+        
+        // Bottom-Left (Slot 3)
+        await drawSlot4Up(s * 4 + 2, 0, bottomReserve);
+        // Bottom-Right (Slot 4)
+        await drawSlot4Up(s * 4 + 3, slotWidth, bottomReserve);
+        // Top-Left (Slot 1)
+        await drawSlot4Up(s * 4, 0, bottomReserve + slotHeight);
+        // Top-Right (Slot 2)
+        await drawSlot4Up(s * 4 + 1, slotWidth, bottomReserve + slotHeight);
       }
     }
     
