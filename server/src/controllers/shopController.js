@@ -249,6 +249,12 @@ exports.triggerPrint = async (req, res) => {
 
     // Add each file to the queue with dynamic print settings
     for (const file of files) {
+      let orientation = 'portrait';
+      if (order.notes) {
+        const match = order.notes.match(/\[Format:.*?, (portrait|landscape),/i);
+        if (match) orientation = match[1].toLowerCase();
+      }
+
       printQueue[shopId].push({
         orderId,
         fileId: file.id,
@@ -257,6 +263,7 @@ exports.triggerPrint = async (req, res) => {
         copies: order.copies || 1,
         printType: order.print_type || 'bw',
         layout: order.layout || 'single',
+        orientation,
       });
     }
 

@@ -183,8 +183,8 @@ async function downloadFile(url, dest) {
 }
 
 // Function to trigger OS print directly to default physical printer with options
-function printFile(filePath, copies = 1, printType = 'bw', layout = 'single') {
-  const logMsg = `🖨️  [PRINTER AGENT] Triggering print (Copies: ${copies}, Type: ${printType}, Layout: ${layout}) for: ${filePath}`;
+function printFile(filePath, copies = 1, printType = 'bw', layout = 'single', orientation = 'portrait') {
+  const logMsg = `🖨️  [PRINTER AGENT] Triggering print (Copies: ${copies}, Type: ${printType}, Layout: ${layout}, Orientation: ${orientation}) for: ${filePath}`;
   console.log(logMsg);
 
   // Write to internal agent log for background verification
@@ -195,7 +195,7 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single') {
 
   if (isWindows) {
     const exePath = path.join(__dirname, 'SumatraPDF.exe');
-    const settingsStr = `${printType === 'bw' ? 'monochrome' : 'color'},${layout === 'double' ? 'duplex' : 'simplex'},${copies}x`;
+    const settingsStr = `${printType === 'bw' ? 'monochrome' : 'color'},${layout === 'double' ? 'duplex' : 'simplex'},${copies}x,${orientation}`;
 
     if (fs.existsSync(exePath)) {
       printCmd = `powershell -Command "` +
@@ -218,7 +218,8 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single') {
       ? '-o ColorModel=Gray -o ColorModel=Monochrome -o ColorModel=BlackWhite -o ColorModel=K' 
       : '-o ColorModel=Color';
     const duplexOpt = layout === 'double' ? '-o sides=two-sided-long-edge' : '-o sides=one-sided';
-    printCmd = `lp -n ${copies} ${colorOpt} ${duplexOpt} "${filePath}"`;
+    const orientationOpt = orientation === 'landscape' ? '-o landscape' : '-o portrait';
+    printCmd = `lp -n ${copies} ${colorOpt} ${duplexOpt} ${orientationOpt} "${filePath}"`;
   }
 
   exec(printCmd, (err) => {
@@ -261,7 +262,7 @@ async function pollForJobs() {
       await downloadFile(job.fileUrl, filePath);
       console.log(`💾 Saved to local disk: ${filePath}`);
 
-      printFile(filePath, job.copies, job.printType, job.layout);
+      printFile(filePath, job.copies, job.printType, job.layout, job.orientation);
     }
   } catch (error) {
     if (error.response && error.response.status === 403) {
