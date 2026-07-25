@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { EventBus } from '../engines/EventBus';
 import { AutosaveEngine } from '../engines/AutosaveEngine';
@@ -11,11 +11,13 @@ import { ShortcutEngine } from '../engines/ShortcutEngine';
 import { PreflightEngine } from '../engines/PreflightEngine';
 import { CostingEngine } from '../engines/CostingEngine';
 
+let enginesInitializedGlobal = false;
+
 export function useEngines() {
-  const initialized = useRef(false);
+  const [initialized, setInitialized] = useState(enginesInitializedGlobal);
 
   useEffect(() => {
-    if (!initialized.current) {
+    if (!enginesInitializedGlobal) {
       console.log('[PrintStudio] Registering Core Engines...');
       
       EngineRegistry.register('EventBus', EventBus);
@@ -30,13 +32,15 @@ export function useEngines() {
       EngineRegistry.register('CostingEngine', CostingEngine);
       
       EngineRegistry.initializeAll();
-      initialized.current = true;
+      enginesInitializedGlobal = true;
+      setInitialized(true);
       
       return () => {
         EngineRegistry.disposeAll();
+        enginesInitializedGlobal = false;
       };
     }
   }, []);
 
-  return initialized.current;
+  return initialized;
 }
