@@ -184,9 +184,9 @@ exports.verifyPickup = async (req, res) => {
     // Notify the student
     await db.execute(
       'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
-      [orders[0].student_id, '\uD83D\uDE80 Order Out for Delivery', 'The delivery agent has picked up your printout and is on the way to you!', 'delivery']
+      [order.student_id, '\uD83D\uDE80 Order Out for Delivery', 'The delivery agent has picked up your printout and is on the way to you!', 'delivery']
     );
-    await sendPushToUser(orders[0].student_id, {
+    await sendPushToUser(order.student_id, {
       title: '🚀 Order Out for Delivery',
       message: 'The delivery agent has picked up your printout and is on the way to you!',
       url: '/student/orders',
@@ -248,17 +248,17 @@ exports.verifyDelivery = async (req, res) => {
       
       await db.execute(
         'INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)',
-        [req.user.id, 'credit', earning, `Delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}`, orders[0].order_hash, wallet_balance]
+        [req.user.id, 'credit', earning, `Delivery #${order.order_hash.substring(0, 8).toUpperCase()}`, order.order_hash, wallet_balance]
       );
 
       // NOTIFY AGENT
       await db.execute(
         'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
-        [req.user.id, '💰 Earnings Credited!', `You earned ₹${earning.toFixed(0)} for delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}.`, 'wallet']
+        [req.user.id, '💰 Earnings Credited!', `You earned ₹${earning.toFixed(0)} for delivery #${order.order_hash.substring(0, 8).toUpperCase()}.`, 'wallet']
       );
       await sendPushToUser(req.user.id, {
         title: '💰 Earnings Credited!',
-        message: `You earned ₹${earning.toFixed(0)} for delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}.`,
+        message: `You earned ₹${earning.toFixed(0)} for delivery #${order.order_hash.substring(0, 8).toUpperCase()}.`,
         url: '/agent/earnings',
         tag: `wallet-${Date.now()}`,
       });
