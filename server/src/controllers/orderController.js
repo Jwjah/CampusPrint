@@ -1,5 +1,5 @@
 const db = require('../config/database');
-const { generateOrderHash, generateQRCode, calculatePrice } = require('../utils/helpers');
+const { generateOrderHash, generateQRCode, calculatePrice, generateOTP } = require('../utils/helpers');
 const { PDFDocument } = require('pdf-lib');
 const { uploadToCloudinary } = require('../middleware/upload');
 const { sendPushToUser } = require('../services/pushService');
@@ -81,10 +81,14 @@ exports.createOrder = async (req, res) => {
     // Generate unique hash
     const orderHash = generateOrderHash(Date.now(), req.user.id);
 
+    // Generate random 6-digit numeric verification codes
+    const pickupCode = generateOTP();
+    const deliveryCode = delivery_type === 'hostel' ? generateOTP() : null;
+
     // Create order
     const [result] = await db.execute(
-      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used, pickup_code, delivery_code) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         orderHash, req.user.id, shop_id,
         print_type || 'bw', layout || 'single', parseInt(copies) || 1,
@@ -94,7 +98,8 @@ exports.createOrder = async (req, res) => {
         'UNPAID', 'pending',
         bindingType, pricing.bindingCost,
         pricing.price_bw_used, pricing.price_color_used,
-        pricing.price_binding_used, pricing.price_stick_file_used
+        pricing.price_binding_used, pricing.price_stick_file_used,
+        pickupCode, deliveryCode
       ]
     );
 
@@ -366,25 +371,52 @@ exports.updateOrderStatus = async (req, res) => {
 exports.verifyPickupByStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { hash } = req.body;
+    const { hash, code } = req.body;
 
-    const [orders] = await db.execute(
-      "SELECT * FROM orders WHERE id = ? AND student_id = ? AND status = 'ready' AND delivery_type = 'pickup'",
-      [id, req.user.id]
-    );
-
+    const [orders] = await db.execute("SELECT * FROM orders WHERE id = ?", [id]);
     if (!orders.length) {
-      return res.status(404).json({ error: 'Order not found, not ready, or not yours' });
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const order = orders[0];
+
+    // If student, must be their order
+    if (req.user.role === 'student' && order.student_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized to verify this order' });
+    }
+
+    // If shop, must be their shop
+    if (req.user.role === 'shop') {
+      const [myShops] = await db.execute("SELECT id FROM shops WHERE user_id = ?", [req.user.id]);
+      if (!myShops.length || myShops[0].id !== order.shop_id) {
+        return res.status(403).json({ error: 'Unauthorized to verify this order' });
+      }
+    }
+
+    if (order.status !== 'ready' || order.delivery_type !== 'pickup') {
+      return res.status(400).json({ error: 'Order is not in a ready state or not for pickup' });
     }
     
-    if (orders[0].order_hash !== hash) {
-      // Check if this hash belongs to a different order
-      const [otherOrders] = await db.execute("SELECT id FROM orders WHERE order_hash = ?", [hash]);
-      if (otherOrders.length > 0) {
-        return res.status(400).json({ error: 'Oops! This QR code belongs to a DIFFERENT order. Please scan the correct one.' });
+    if (hash) {
+      if (order.order_hash !== hash) {
+        const [otherOrders] = await db.execute("SELECT id FROM orders WHERE order_hash = ?", [hash]);
+        if (otherOrders.length > 0) {
+          return res.status(400).json({ error: 'Oops! This QR code belongs to a DIFFERENT order. Please scan the correct one.' });
+        }
+        return res.status(400).json({ error: 'Invalid QR code. This code is not recognized.' });
       }
-      return res.status(400).json({ error: 'Invalid QR code. This code is not recognized.' });
+    } else if (code) {
+      if (order.pickup_code !== code) {
+        return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
+      }
+    } else {
+      return res.status(400).json({ error: 'QR hash or verification number required' });
     }
+
+    // Consume the verification code — prevents reuse and logs who verified it
+    await db.execute(
+      'UPDATE orders SET pickup_code = NULL, pickup_verified_by = ?, pickup_verified_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [req.user.id, id]
+    );
 
     // Call internal logic to mark as delivered
     req.body.status = 'delivered';
@@ -400,7 +432,7 @@ exports.verifyPickupByStudent = async (req, res) => {
 exports.verifyDeliveryByStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { hash } = req.body;
+    const { hash, code } = req.body;
 
     const [orders] = await db.execute(
       "SELECT * FROM orders WHERE id = ? AND student_id = ? AND status = 'out_for_delivery' AND delivery_type = 'hostel'",
@@ -410,19 +442,27 @@ exports.verifyDeliveryByStudent = async (req, res) => {
     if (!orders.length) {
       return res.status(404).json({ error: 'Order not found, not out for delivery, or not yours' });
     }
+    const order = orders[0];
     
-    if (orders[0].order_hash !== hash) {
-      // Check if this hash belongs to a different order
-      const [otherOrders] = await db.execute("SELECT id FROM orders WHERE order_hash = ?", [hash]);
-      if (otherOrders.length > 0) {
-        return res.status(400).json({ error: 'Oops! This QR code belongs to a DIFFERENT order. Please scan the correct one.' });
+    if (hash) {
+      if (order.order_hash !== hash) {
+        const [otherOrders] = await db.execute("SELECT id FROM orders WHERE order_hash = ?", [hash]);
+        if (otherOrders.length > 0) {
+          return res.status(400).json({ error: 'Oops! This QR code belongs to a DIFFERENT order. Please scan the correct one.' });
+        }
+        return res.status(400).json({ error: 'Invalid QR code. This code is not recognized.' });
       }
-      return res.status(400).json({ error: 'Invalid QR code. This code is not recognized.' });
+    } else if (code) {
+      if (order.delivery_code !== code) {
+        return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
+      }
+    } else {
+      return res.status(400).json({ error: 'QR hash or verification number required' });
     }
 
     // Update agent delivery record
     await db.execute("UPDATE deliveries SET status = 'delivered', dropoff_verified = 1, delivery_time = CURRENT_TIMESTAMP WHERE order_id = ? AND agent_id = ?",
-      [id, orders[0].agent_id]
+      [id, order.agent_id]
     );
 
     // Credit agent wallet
@@ -450,6 +490,12 @@ exports.verifyDeliveryByStudent = async (req, res) => {
         tag: `delivery-${id}`,
       });
     }
+
+    // Consume the delivery verification code — prevents reuse and logs who verified it
+    await db.execute(
+      'UPDATE orders SET delivery_code = NULL, delivery_verified_by = ?, delivery_verified_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [req.user.id, id]
+    );
 
     // Mark order as delivered via internal logic
     req.body.status = 'delivered';
@@ -702,7 +748,7 @@ exports.downloadPrintPdf = async (req, res) => {
     
     // Fetch file details along with order details
     const [files] = await db.execute(
-      `SELECT f.*, o.order_hash, o.order_id, o.shop_id, o.pickup_qr, o.delivery_qr, o.print_type, o.notes, o.payment_status, o.status 
+      `SELECT f.*, o.order_hash, o.order_id, o.shop_id, o.pickup_qr, o.delivery_qr, o.print_type, o.notes, o.payment_status, o.status, o.pickup_code, o.delivery_code 
        FROM order_files f 
        JOIN orders o ON f.order_id = o.id 
        WHERE f.id = ?`,
@@ -793,7 +839,9 @@ exports.downloadPrintPdf = async (req, res) => {
         file.print_type,
         pagesPerSheet,
         file.order_id,
-        orientation
+        orientation,
+        file.pickup_code,
+        file.delivery_code
       );
     } catch (processErr) {
       console.error('PDF modifications failed, sending original:', processErr.message);
@@ -896,10 +944,12 @@ exports.reorderOrder = async (req, res) => {
     // 7. Insert new order in a transaction block
     const newOrderId = await db.transaction(async (conn) => {
       const newOrderHash = generateOrderHash(Date.now(), req.user.id);
+      const pickupCode = generateOTP();
+      const deliveryCode = oldOrder.delivery_type === 'hostel' ? generateOTP() : null;
       
       const [result] = await conn.execute(
-        `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used, pickup_code, delivery_code) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newOrderHash, req.user.id, oldOrder.shop_id,
           oldOrder.print_type, oldOrder.layout, oldOrder.copies,
@@ -908,7 +958,8 @@ exports.reorderOrder = async (req, res) => {
           'UNPAID', 'pending',
           bindingType, pricing.bindingCost,
           pricing.price_bw_used, pricing.price_color_used,
-          pricing.price_binding_used, pricing.price_stick_file_used
+          pricing.price_binding_used, pricing.price_stick_file_used,
+          pickupCode, deliveryCode
         ]
       );
       

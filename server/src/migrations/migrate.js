@@ -70,6 +70,12 @@ const migrate = async () => {
       agent_id INTEGER DEFAULT NULL,
       pickup_qr TEXT DEFAULT NULL,
       delivery_qr TEXT DEFAULT NULL,
+      pickup_code TEXT DEFAULT NULL,
+      delivery_code TEXT DEFAULT NULL,
+      pickup_verified_by INTEGER DEFAULT NULL,
+      pickup_verified_at TEXT DEFAULT NULL,
+      delivery_verified_by INTEGER DEFAULT NULL,
+      delivery_verified_at TEXT DEFAULT NULL,
       picked_up_at TEXT,
       delivered_at TEXT,
       finishing_type TEXT DEFAULT 'none',
@@ -734,6 +740,12 @@ const migrate = async () => {
       agent_id INT DEFAULT NULL,
       pickup_qr TEXT DEFAULT NULL,
       delivery_qr TEXT DEFAULT NULL,
+      pickup_code VARCHAR(6) DEFAULT NULL,
+      delivery_code VARCHAR(6) DEFAULT NULL,
+      pickup_verified_by INT DEFAULT NULL,
+      pickup_verified_at TIMESTAMP NULL,
+      delivery_verified_by INT DEFAULT NULL,
+      delivery_verified_at TIMESTAMP NULL,
       picked_up_at TIMESTAMP NULL,
       delivered_at TIMESTAMP NULL,
       finishing_type VARCHAR(50) DEFAULT 'none',
@@ -1406,7 +1418,13 @@ const migrate = async () => {
     `ALTER TABLE orders ADD COLUMN price_bw_used DECIMAL(10,2) DEFAULT 2.00`,
     `ALTER TABLE orders ADD COLUMN price_color_used DECIMAL(10,2) DEFAULT 5.00`,
     `ALTER TABLE orders ADD COLUMN price_binding_used DECIMAL(10,2) DEFAULT 30.00`,
-    `ALTER TABLE orders ADD COLUMN price_stick_file_used DECIMAL(10,2) DEFAULT 10.00`
+    `ALTER TABLE orders ADD COLUMN price_stick_file_used DECIMAL(10,2) DEFAULT 10.00`,
+    `ALTER TABLE orders ADD COLUMN pickup_code VARCHAR(6) DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN delivery_code VARCHAR(6) DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN pickup_verified_by INT DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN pickup_verified_at TIMESTAMP NULL`,
+    `ALTER TABLE orders ADD COLUMN delivery_verified_by INT DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN delivery_verified_at TIMESTAMP NULL`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { console.warn('Alter table warning:', e.message); } // Ignore if column already exists or command unsupported

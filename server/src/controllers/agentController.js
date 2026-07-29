@@ -134,35 +134,40 @@ exports.getActiveMissions = async (req, res) => {
 // POST /api/agent/verify-pickup — Agent scans shop QR to confirm they have collected the printout
 exports.verifyPickup = async (req, res) => {
   try {
-    const { orderId, hash } = req.body;
+    const { orderId, hash, code } = req.body;
 
-    // Check if this hash exists at all
-    const [anyOrderWithHash] = await db.execute('SELECT id, agent_id, status FROM orders WHERE order_hash = ?', [hash]);
-    
-    if (!anyOrderWithHash.length) {
-      return res.status(400).json({ error: 'Invalid QR code. This code is not recognized in the system.' });
+    // Check if this order exists
+    const [anyOrder] = await db.execute('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (!anyOrder.length) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const order = anyOrder[0];
+
+    // Verify hash or code
+    if (hash) {
+      if (order.order_hash !== hash) {
+        return res.status(400).json({ error: 'Invalid QR code. This code is not recognized.' });
+      }
+    } else if (code) {
+      if (order.pickup_code !== code) {
+        return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
+      }
+    } else {
+      return res.status(400).json({ error: 'QR hash or verification number required' });
     }
 
-    if (anyOrderWithHash[0].id != orderId) {
-      return res.status(400).json({ error: 'Oops! This QR code belongs to a DIFFERENT order. Please scan the correct one.' });
-    }
-
-    // Now find the exact order for this agent in 'ready' state
-    const [orders] = await db.execute(
-      `SELECT * FROM orders 
-       WHERE id = ? 
-       AND agent_id = ? 
-       AND status = 'ready'
-       AND delivery_type = 'hostel'
-       AND order_hash = ?`,
-      [orderId, req.user.id, hash]
-    );
-
-    if (!orders.length) {
+    // Now verify the state is ready and assigned to this agent
+    if (order.agent_id !== req.user.id || order.status !== 'ready' || order.delivery_type !== 'hostel') {
       return res.status(400).json({ 
         error: 'Order is not in a valid state for pickup. Make sure you accepted it and it is ready.' 
       });
     }
+
+    // Consume the pickup verification code — prevents reuse and logs who verified it
+    await db.execute(
+      'UPDATE orders SET pickup_code = NULL, pickup_verified_by = ?, pickup_verified_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [req.user.id, orderId]
+    );
 
     // Update the delivery record to in_transit
     await db.execute(
@@ -198,26 +203,35 @@ exports.verifyPickup = async (req, res) => {
 // POST /api/agent/verify-delivery — Verify delivery with QR
 exports.verifyDelivery = async (req, res) => {
   try {
-    const { orderId, hash } = req.body;
+    const { orderId, hash, code } = req.body;
 
-    // Check if this hash exists at all
-    const [anyOrderWithHash] = await db.execute('SELECT id, agent_id, status FROM orders WHERE order_hash = ?', [hash]);
-    
-    if (!anyOrderWithHash.length) {
-      return res.status(400).json({ error: 'Invalid QR code. This code is not recognized in the system.' });
+    const [anyOrder] = await db.execute('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (!anyOrder.length) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const order = anyOrder[0];
+
+    if (hash) {
+      if (order.order_hash !== hash) {
+        return res.status(400).json({ error: 'Invalid QR code. This code is not recognized in the system.' });
+      }
+    } else if (code) {
+      if (order.delivery_code !== code) {
+        return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
+      }
+    } else {
+      return res.status(400).json({ error: 'QR hash or verification number required' });
     }
 
-    if (anyOrderWithHash[0].id != orderId) {
-      return res.status(400).json({ error: 'Oops! This QR code belongs to a DIFFERENT order. Please scan the correct one.' });
-    }
-
-    const [orders] = await db.execute(
-      "SELECT * FROM orders WHERE id = ? AND order_hash = ? AND agent_id = ? AND status = 'out_for_delivery'",
-      [orderId, hash, req.user.id]
-    );
-    if (!orders.length) {
+    if (order.agent_id !== req.user.id || order.status !== 'out_for_delivery') {
       return res.status(400).json({ error: 'Order is not in out_for_delivery state or not assigned to you.' });
     }
+
+    // Consume the delivery verification code — prevents reuse and logs who verified it
+    await db.execute(
+      'UPDATE orders SET delivery_code = NULL, delivery_verified_by = ?, delivery_verified_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [req.user.id, orderId]
+    );
 
     await db.execute("UPDATE deliveries SET status = 'delivered', dropoff_verified = 1, delivery_time = CURRENT_TIMESTAMP WHERE order_id = ? AND agent_id = ?",
       [orderId, req.user.id]

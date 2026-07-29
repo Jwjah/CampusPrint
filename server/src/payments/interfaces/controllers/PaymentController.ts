@@ -59,7 +59,7 @@ export class PaymentController {
         prefill: {
           name: student.name,
           email: student.email,
-          contact: student.phone || ''
+          contact: student.phone || '9999999999'
         },
         readonly: {
           contact: true,

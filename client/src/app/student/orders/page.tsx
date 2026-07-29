@@ -44,6 +44,10 @@ export default function OrdersPage() {
   const [isPaying, setIsPaying] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [verifyMode, setVerifyMode] = useState<'pickup-code' | 'delivery-code' | null>(null);
+  const [verifyCodeInput, setVerifyCodeInput] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const handlePay = async (order: any) => {
     setIsPaying(true);
@@ -182,6 +186,34 @@ export default function OrdersPage() {
     }
   };
 
+  const handleVerifyByCode = async (type: 'pickup' | 'delivery') => {
+    if (!verifyCodeInput || verifyCodeInput.length !== 6) {
+      setVerifyError('Please enter a valid 6-digit code.');
+      return;
+    }
+    const orderId = selected?.id;
+    if (!orderId) return;
+    setIsVerifying(true);
+    setVerifyError(null);
+    try {
+      if (type === 'pickup') {
+        await api.post(`/orders/${orderId}/verify-pickup`, { code: verifyCodeInput });
+        toast.success('Pickup verified! Order complete. 🎉');
+      } else {
+        await api.post(`/orders/${orderId}/verify-delivery`, { code: verifyCodeInput });
+        toast.success('Delivery verified! Enjoy your prints. 🎉');
+      }
+      setVerifyMode(null);
+      setVerifyCodeInput('');
+      setSelected(null);
+      loadOrders();
+    } catch (err: any) {
+      setVerifyError(err.response?.data?.error || 'Invalid code. Please check and try again.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   return (
     <div>
       <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>My Orders</h1>
@@ -293,7 +325,7 @@ export default function OrdersPage() {
       )}
 
       {/* Order Detail Modal */}
-      <ModalOverlay isOpen={!!selected} onClose={() => setSelected(null)}>
+      <ModalOverlay isOpen={!!selected} onClose={() => { setSelected(null); setVerifyMode(null); setVerifyCodeInput(''); setVerifyError(null); }}>
         {selected && (
           <div className="glass-card" style={{ padding: 32 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -409,20 +441,78 @@ export default function OrdersPage() {
             )}
 
             {selected.status === 'ready' && selected.delivery_type === 'pickup' && (
-              <div style={{ textAlign: 'center', marginTop: 24 }}>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>You are at the shop? Scan their QR to collect:</p>
-                <TapButton className="btn btn-primary btn-lg" style={{ width: '100%', background: 'var(--success)' }} onClick={() => setScannerType('shop')}>
-                  📷 Scan Shop QR
-                </TapButton>
+              <div style={{ marginTop: 24 }}>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>You are at the shop? Verify your order:</p>
+                {verifyMode === 'pickup-code' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      className="input"
+                      placeholder="Enter 6-digit code"
+                      value={verifyCodeInput}
+                      onChange={e => { setVerifyCodeInput(e.target.value.replace(/\D/g, '')); setVerifyError(null); }}
+                      style={{ textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: 700 }}
+                      autoFocus
+                    />
+                    {verifyError && <p style={{ color: 'var(--error)', fontSize: 12, textAlign: 'center' }}>{verifyError}</p>}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <TapButton className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setVerifyMode(null); setVerifyCodeInput(''); setVerifyError(null); }}>Cancel</TapButton>
+                      <TapButton className="btn btn-primary" style={{ flex: 2, background: 'var(--success)' }} onClick={() => handleVerifyByCode('pickup')} disabled={isVerifying || verifyCodeInput.length !== 6}>
+                        {isVerifying ? 'Verifying...' : '✓ Verify Code'}
+                      </TapButton>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <TapButton className="btn btn-primary" style={{ flex: 1, background: 'var(--success)' }} onClick={() => setScannerType('shop')}>
+                      📷 Scan QR
+                    </TapButton>
+                    <TapButton className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setVerifyMode('pickup-code'); setVerifyCodeInput(''); setVerifyError(null); }}>
+                      🔢 Enter Code
+                    </TapButton>
+                  </div>
+                )}
               </div>
             )}
 
             {selected.status === 'out_for_delivery' && (
-              <div style={{ textAlign: 'center', marginTop: 24 }}>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>Agent is here? Scan their QR to verify delivery:</p>
-                <TapButton className="btn btn-primary btn-lg" style={{ width: '100%', background: 'var(--success)' }} onClick={() => setScannerType('agent')}>
-                  📷 Scan Agent QR
-                </TapButton>
+              <div style={{ marginTop: 24 }}>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>Agent is here? Verify your delivery:</p>
+                {verifyMode === 'delivery-code' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      className="input"
+                      placeholder="Enter 6-digit code"
+                      value={verifyCodeInput}
+                      onChange={e => { setVerifyCodeInput(e.target.value.replace(/\D/g, '')); setVerifyError(null); }}
+                      style={{ textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: 700 }}
+                      autoFocus
+                    />
+                    {verifyError && <p style={{ color: 'var(--error)', fontSize: 12, textAlign: 'center' }}>{verifyError}</p>}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <TapButton className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setVerifyMode(null); setVerifyCodeInput(''); setVerifyError(null); }}>Cancel</TapButton>
+                      <TapButton className="btn btn-primary" style={{ flex: 2, background: 'var(--success)' }} onClick={() => handleVerifyByCode('delivery')} disabled={isVerifying || verifyCodeInput.length !== 6}>
+                        {isVerifying ? 'Verifying...' : '✓ Verify Code'}
+                      </TapButton>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <TapButton className="btn btn-primary" style={{ flex: 1, background: 'var(--success)' }} onClick={() => setScannerType('agent')}>
+                      📷 Scan QR
+                    </TapButton>
+                    <TapButton className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setVerifyMode('delivery-code'); setVerifyCodeInput(''); setVerifyError(null); }}>
+                      🔢 Enter Code
+                    </TapButton>
+                  </div>
+                )}
               </div>
             )}
 

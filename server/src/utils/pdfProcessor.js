@@ -48,7 +48,7 @@ const SEPARATOR_Y = Math.max(FOOTER_TOP_Y, qrY + QR_SIZE);
 const RESERVED_SPACE = SEPARATOR_Y + SEPARATOR_GAP;
 
 class FooterRenderer {
-  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr, printType = 'bw', orderIdStr = null) {
+  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr, printType = 'bw', orderIdStr = null, pickupCode = null, deliveryCode = null) {
     this.page = page;
     this.pdfDoc = pdfDoc;
     this.orderHash = orderHash;
@@ -57,6 +57,8 @@ class FooterRenderer {
     this.deliveryQr = deliveryQr;
     this.printType = printType;
     this.orderIdStr = orderIdStr;
+    this.pickupCode = pickupCode;
+    this.deliveryCode = deliveryCode;
     
     const { width, height } = page.getSize();
     this.width = width;
@@ -203,8 +205,8 @@ class FooterRenderer {
       
       qrsToEmbed.push({
         bytes: qrBytes,
-        label1: this.deliveryQr ? 'Order' : 'Pickup',
-        label2: `CP${shortId}`,
+        label1: this.deliveryQr ? 'Shop Handover' : 'Pickup Code',
+        label2: this.pickupCode || `CP${shortId}`,
       });
     }
     if (this.deliveryQr) {
@@ -228,8 +230,8 @@ class FooterRenderer {
       
       qrsToEmbed.push({
         bytes: qrBytes,
-        label1: 'Delivery',
-        label2: 'Track',
+        label1: 'Customer Delivery',
+        label2: this.deliveryCode || 'Track',
       });
     }
     
@@ -261,13 +263,13 @@ class FooterRenderer {
         color: captionColor,
       });
       
-      // Caption Line 2
-      const w2 = this.font.widthOfTextAtSize(qrsToEmbed[0].label2, captionSize);
+      // Caption Line 2 — bold for print readability
+      const w2 = this.boldFont.widthOfTextAtSize(qrsToEmbed[0].label2, captionSize);
       this.page.drawText(qrsToEmbed[0].label2, {
         x: qrX + (QR_SIZE - w2) / 2,
         y: cap2Y,
         size: captionSize,
-        font: this.font,
+        font: this.boldFont,
         color: captionColor,
       });
       
@@ -295,12 +297,12 @@ class FooterRenderer {
         color: captionColor,
       });
       
-      const w2 = this.font.widthOfTextAtSize(qrsToEmbed[0].label2, captionSize);
+      const w2 = this.boldFont.widthOfTextAtSize(qrsToEmbed[0].label2, captionSize);
       this.page.drawText(qrsToEmbed[0].label2, {
         x: qrX1 + (QR_SIZE - w2) / 2,
         y: cap2Y,
         size: captionSize,
-        font: this.font,
+        font: this.boldFont,
         color: captionColor,
       });
 
@@ -322,12 +324,12 @@ class FooterRenderer {
         color: captionColor,
       });
       
-      const w4 = this.font.widthOfTextAtSize(qrsToEmbed[1].label2, captionSize);
+      const w4 = this.boldFont.widthOfTextAtSize(qrsToEmbed[1].label2, captionSize);
       this.page.drawText(qrsToEmbed[1].label2, {
         x: qrX2 + (QR_SIZE - w4) / 2,
         y: cap2Y,
         size: captionSize,
-        font: this.font,
+        font: this.boldFont,
         color: captionColor,
       });
     }
@@ -436,7 +438,7 @@ class FooterRenderer {
  * on the last page. All positions and scaling are derived dynamically from the printer profile.
  * Supports 1-up, 2-up (vertical stack), and 4-up (2x2 grid) formatting in a single pass.
  */
-async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw', pagesPerSheet = 1, orderIdStr = null, orientation = 'portrait') {
+async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw', pagesPerSheet = 1, orderIdStr = null, orientation = 'portrait', pickupCode = null, deliveryCode = null) {
   try {
     const srcDoc = await PDFDocument.load(pdfBuffer);
     const srcPages = srcDoc.getPages();
@@ -605,7 +607,9 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
       pickupQrBase64,
       deliveryQrBase64,
       printType,
-      orderIdStr
+      orderIdStr,
+      pickupCode,
+      deliveryCode
     );
     await renderer.loadFonts();
     await renderer.render();

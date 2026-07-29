@@ -363,6 +363,16 @@ export default function QueuePage() {
             <div className="qr-container" style={{ background: '#fff', padding: 16, borderRadius: 16, display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
               <img src={qrModalOrder.pickup_qr} alt="Pickup QR" style={{ width: 200, height: 200 }} />
             </div>
+            {qrModalOrder.pickup_code && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>
+                  Or share this pickup code with the student:
+                </div>
+                <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: 10, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                  {qrModalOrder.pickup_code}
+                </div>
+              </div>
+            )}
             <button className="btn btn-primary" style={{ width: '100%', marginTop: 32 }} onClick={() => setQrModalOrder(null)}>
               Close View
             </button>
