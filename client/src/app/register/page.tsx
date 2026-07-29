@@ -14,7 +14,6 @@ import Logo from '@/components/ui/Logo';
 const roles = [
   { value: 'student', label: '🎓 Student', desc: 'Print documents & get delivery' },
   { value: 'shop', label: '🏪 Shop Owner', desc: 'Manage print queue & revenue' },
-  { value: 'agent', label: '🚴 Delivery Agent', desc: 'Deliver & earn per order' },
 ];
 
 export default function RegisterPage() {
