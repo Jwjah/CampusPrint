@@ -10,6 +10,8 @@ interface User {
   phone?: string;
   hostel?: string;
   room_number?: string;
+  is_delivery_partner?: boolean;
+  delivery_agent_status?: string;
 }
 
 interface AuthState {

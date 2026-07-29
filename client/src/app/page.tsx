@@ -204,8 +204,6 @@ export default function LandingPage() {
             {[
               { emoji: '🎓', role: 'Student', desc: 'Upload & print documents, track orders in real-time' },
               { emoji: '🏪', role: 'Shop Owner', desc: 'Manage live print queue, set pricing, track revenue' },
-              { emoji: '🚴', role: 'Delivery Agent', desc: 'Accept gigs, scan QR codes, earn per delivery' },
-              { emoji: '⚡', role: 'Admin', desc: 'Analytics dashboard, approve shops, manage platform' },
             ].map((r, i) => (
               <motion.div
                 key={i}

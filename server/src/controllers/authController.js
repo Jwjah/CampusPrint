@@ -88,10 +88,14 @@ exports.verifyOTP = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '365d' }
     );
 
+    const [da] = await db.execute('SELECT agent_id, status FROM delivery_agent_availability WHERE agent_id = ?', [user.id]);
+    const is_delivery_partner = da.length > 0;
+    const delivery_agent_status = is_delivery_partner ? da[0].status : null;
+
     res.json({
       message: 'Email verified successfully',
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, is_delivery_partner, delivery_agent_status },
     });
   } catch (err) {
     console.error('OTP verify error:', err);
@@ -195,6 +199,10 @@ exports.login = async (req, res) => {
         user.is_verified = 1;
     }
 
+    const [da] = await db.execute('SELECT agent_id, status FROM delivery_agent_availability WHERE agent_id = ?', [user.id]);
+    const is_delivery_partner = da.length > 0;
+    const delivery_agent_status = is_delivery_partner ? da[0].status : null;
+
     res.json({
       message: 'Login successful',
       token,
@@ -208,6 +216,8 @@ exports.login = async (req, res) => {
         phone: user.phone || null,
         hostel: user.hostel || null,
         room_number: user.room_number || null,
+        is_delivery_partner,
+        delivery_agent_status,
       },
     });
   } catch (err) {
@@ -244,7 +254,12 @@ exports.resendOTP = async (req, res) => {
 exports.getMe = async (req, res) => {
   try {
     const [users] = await db.execute(
-      'SELECT id, name, email, role, phone, avatar, hostel, room_number, is_verified, created_at FROM users WHERE id = ?',
+      `SELECT u.id, u.name, u.email, u.role, u.phone, u.avatar, u.hostel, u.room_number, u.is_verified, u.created_at,
+              CASE WHEN da.agent_id IS NOT NULL THEN 1 ELSE 0 END AS is_delivery_partner,
+              da.status AS delivery_agent_status
+       FROM users u
+       LEFT JOIN delivery_agent_availability da ON u.id = da.agent_id
+       WHERE u.id = ?`,
       [req.user.id]
     );
 
@@ -252,17 +267,24 @@ exports.getMe = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const user = users[0];
+    // Convert SQL integer to boolean for JS
+    user.is_delivery_partner = !!user.is_delivery_partner;
+
     // If user is a shop owner, include shop info
     let shop = null;
     if (users[0].role === 'shop') {
-      const [shops] = await db.execute('SELECT * FROM shops WHERE user_id = ?', [req.user.id]);
-      shop = shops[0] || null;
+      const [shops] = await db.execute(
+        'SELECT id, name, is_active FROM shops WHERE owner_id = ?',
+        [req.user.id]
+      );
+      if (shops.length) shop = shops[0];
     }
 
-    res.json({ user: users[0], shop });
+    res.json({ user, shop });
   } catch (err) {
-    console.error('GetMe error:', err);
-    res.status(500).json({ error: 'Failed to fetch profile' });
+    console.error('Get user error:', err);
+    res.status(500).json({ error: 'Failed to fetch user data' });
   }
 };
 // PATCH /api/users/profile — Update user profile
@@ -298,5 +320,41 @@ exports.getTransactions = async (req, res) => {
   } catch (err) {
     console.error('Get transactions error:', err);
     res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+};
+
+// POST /api/auth/register-agent
+exports.registerAgent = async (req, res) => {
+  try {
+    const { phone, hostel, room_number } = req.body;
+    
+    // Update user info if provided
+    await db.execute(
+      'UPDATE users SET phone = COALESCE(?, phone), hostel = COALESCE(?, hostel), room_number = COALESCE(?, room_number) WHERE id = ?',
+      [phone || null, hostel || null, room_number || null, req.user.id]
+    );
+
+    // Register as delivery partner safely (database agnostic)
+    const [existing] = await db.execute("SELECT agent_id FROM delivery_agent_availability WHERE agent_id = ?", [req.user.id]);
+    if (!existing.length) {
+      await db.execute("INSERT INTO delivery_agent_availability (agent_id, status) VALUES (?, 'AVAILABLE')", [req.user.id]);
+    }
+    
+    res.json({ message: 'Successfully registered as a delivery partner' });
+  } catch (err) {
+    console.error('Register agent error:', err);
+    res.status(500).json({ error: 'Failed to register as delivery partner' });
+  }
+};
+
+// POST /api/auth/audit
+exports.audit = async (req, res) => {
+  try {
+    const { event } = req.body;
+    console.log(`[AUDIT] User ${req.user.id} (${req.user.email}) triggered: ${event}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Audit error:', err);
+    res.status(500).json({ error: 'Failed to log audit event' });
   }
 };

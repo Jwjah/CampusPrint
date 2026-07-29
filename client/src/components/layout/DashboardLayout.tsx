@@ -119,6 +119,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => media.removeEventListener('change', listener);
   }, []);
 
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingForm, setOnboardingForm] = useState({ phone: '', hostel: '', room_number: '', acceptTerms: false });
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+
   useEffect(() => {
     loadUser();
   }, [loadUser]);
@@ -130,18 +134,83 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [user, loading, router]);
 
   useEffect(() => {
+    if (user && user.role === 'student') {
+      const modeKey = `campusprint_dashboard_mode_${user.id}`;
+      // 1. Restrict access to /agent if not a delivery partner
+      if (pathname.startsWith('/agent') && !user.is_delivery_partner) {
+        router.replace('/student');
+        return;
+      }
+      
+      // 2. Initial mode restoration
+      const savedMode = localStorage.getItem(modeKey);
+      if (pathname === '/student' && savedMode === 'delivery' && user.is_delivery_partner) {
+        router.replace('/agent');
+        return;
+      }
+      
+      // 3. Sync localStorage to current path
+      if (pathname.startsWith('/agent')) {
+        localStorage.setItem(modeKey, 'delivery');
+      } else if (pathname.startsWith('/student')) {
+        localStorage.setItem(modeKey, 'student');
+      }
+    }
+  }, [user, pathname, router]);
+
+  useEffect(() => {
+    if (user) {
+      setOnboardingForm({
+        phone: user.phone || '',
+        hostel: user.hostel || '',
+        room_number: user.room_number || '',
+        acceptTerms: false
+      });
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (user) {
       const fetchNotifs = () => {
         api.get('/admin/notifications').then(({ data }) => {
           setNotifCount(data.unread);
           setNotifications(data.notifications || []);
         }).catch(() => {});
+        // Also refresh user data (including live agent status)
+        loadUser();
       };
       fetchNotifs();
       const interval = setInterval(fetchNotifs, 30000);
       return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user, pathname, loadUser]);
+
+  const handleRegisterAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onboardingForm.acceptTerms) {
+      toast.error('You must accept the Terms and Conditions.');
+      return;
+    }
+    setOnboardingLoading(true);
+    try {
+      await api.post('/auth/register-agent', onboardingForm);
+      toast.success('Successfully registered as a Delivery Partner!');
+      api.post('/auth/audit', { event: 'DELIVERY_PARTNER_REGISTERED' }).catch(()=>{});
+      await loadUser(); // Reload user to get updated is_delivery_partner flag
+      setShowOnboarding(false);
+      if (user) {
+        localStorage.setItem(`campusprint_dashboard_mode_${user.id}`, 'delivery');
+      }
+      router.push('/agent'); // Switch to delivery mode immediately
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Registration failed');
+    } finally {
+      setOnboardingLoading(false);
+    }
+  };
+
+  const isAgentRoute = pathname.startsWith('/agent');
+  const displayRole = (user?.role === 'student' && isAgentRoute) ? 'agent' : user?.role;
 
   if (loading || !user) {
     return (
@@ -155,10 +224,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  const navItems = roleNavItems[user.role] || [];
+  const navItems = roleNavItems[displayRole as keyof typeof roleNavItems] || [];
   const roleLabels: Record<string, string> = { student: '🎓 Student', shop: '🏪 Shop', agent: '🚴 Agent', admin: '⚡ Admin' };
 
   const handleLogout = () => {
+    if (user) {
+      localStorage.removeItem(`campusprint_dashboard_mode_${user.id}`);
+    }
     logout();
     router.push('/login');
   };
@@ -195,7 +267,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Link href={`/${user.role}`} style={{ textDecoration: 'none' }}>
+            <Link href={`/${displayRole}`} style={{ textDecoration: 'none' }}>
               <Logo size={32} />
             </Link>
             
@@ -236,7 +308,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             background: 'var(--primary-glow)', fontSize: 13, fontWeight: 600,
             color: 'var(--primary-light)',
           }}>
-            <PulseDot /> {roleLabels[user.role]}
+            <PulseDot /> {roleLabels[displayRole as keyof typeof roleLabels]}
           </div>
         </div>
 
@@ -267,11 +339,57 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* User info */}
         <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+          {user.role === 'student' && (
+            <div style={{ marginBottom: 16 }}>
+              {user.is_delivery_partner ? (
+                <>
+                  <div style={{ padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 8, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>Delivery Partner</div>
+                    <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, color: user.delivery_agent_status === 'AVAILABLE' ? 'var(--success)' : 'var(--text-tertiary)' }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: user.delivery_agent_status === 'AVAILABLE' ? 'var(--success)' : 'currentColor' }} />
+                      {user.delivery_agent_status === 'AVAILABLE' ? 'Available' : 'Offline'}
+                    </div>
+                  </div>
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      const newMode = isAgentRoute ? 'student' : 'agent';
+                      if (user) {
+                        localStorage.setItem(`campusprint_dashboard_mode_${user.id}`, newMode === 'agent' ? 'delivery' : 'student');
+                      }
+                      api.post('/auth/audit', { event: newMode === 'agent' ? 'MODE_SWITCHED_TO_DELIVERY' : 'MODE_SWITCHED_TO_STUDENT' }).catch(()=>{});
+                      router.push(`/${newMode}`);
+                      setSidebarOpen(false);
+                    }}
+                    className="btn btn-secondary" style={{ width: '100%', fontSize: 12, padding: '8px', justifyContent: 'center' }}
+                  >
+                    {isAgentRoute ? '🎓 Switch to Student Mode' : '🚴 Switch to Delivery Mode'}
+                  </motion.button>
+                </>
+              ) : (
+                <>
+                  <div style={{ padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 8, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>Delivery Partner</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Not Registered</div>
+                  </div>
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowOnboarding(true)}
+                    className="btn btn-primary" style={{ width: '100%', fontSize: 12, padding: '8px', justifyContent: 'center' }}
+                  >
+                    🚴 Become a Delivery Partner
+                  </motion.button>
+                </>
+              )}
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <div className="avatar">{user.name.charAt(0).toUpperCase()}</div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{user.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{user.email}</div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{user.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{user.email}</div>
             </div>
           </div>
           <motion.button
@@ -447,6 +565,80 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     ✕
                   </button>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* Onboarding Modal */}
+          <AnimatePresence>
+            {showOnboarding && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{
+                  position: 'fixed', inset: 0, zIndex: 100, display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+                  padding: 24,
+                }}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  className="glass-card"
+                  style={{ width: '100%', maxWidth: 480, padding: 32, maxHeight: '90vh', overflowY: 'auto' }}
+                >
+                  <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8, textAlign: 'center' }}>🚴 Become a Delivery Partner</h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 24, textAlign: 'center' }}>
+                    Deliver prints on campus and earn money. Please review the terms and complete any missing details below.
+                  </p>
+
+                  <form onSubmit={handleRegisterAgent} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {!user.phone && (
+                      <div className="input-group">
+                        <label>Phone Number <span style={{color:'var(--error)'}}>*</span></label>
+                        <input className="input" type="tel" required placeholder="e.g. +91 9876543210"
+                          value={onboardingForm.phone} onChange={(e) => setOnboardingForm({...onboardingForm, phone: e.target.value})} />
+                      </div>
+                    )}
+                    
+                    {(!user.hostel || !user.room_number) && (
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <div className="input-group" style={{ flex: 1 }}>
+                          <label>Hostel</label>
+                          <input className="input" type="text" placeholder="e.g. Barak"
+                            value={onboardingForm.hostel} onChange={(e) => setOnboardingForm({...onboardingForm, hostel: e.target.value})} />
+                        </div>
+                        <div className="input-group" style={{ flex: 1 }}>
+                          <label>Room No.</label>
+                          <input className="input" type="text" placeholder="e.g. 204"
+                            value={onboardingForm.room_number} onChange={(e) => setOnboardingForm({...onboardingForm, room_number: e.target.value})} />
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ background: 'var(--bg-tertiary)', padding: 16, borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, maxHeight: 150, overflowY: 'auto', marginBottom: 8 }}>
+                      <strong>Terms and Conditions</strong><br/>
+                      1. You agree to deliver prints securely and promptly to the designated locations.<br/>
+                      2. You are responsible for verifying QR codes at pickup and dropoff.<br/>
+                      3. Earnings will be credited to your wallet upon successful delivery verification.<br/>
+                      4. Misuse of the platform or failure to deliver may result in suspension of your delivery partner privileges.
+                    </div>
+
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+                      <input type="checkbox" style={{ marginTop: 2 }} required
+                        checked={onboardingForm.acceptTerms} onChange={(e) => setOnboardingForm({...onboardingForm, acceptTerms: e.target.checked})} />
+                      <span>I agree to the Terms and Conditions and understand my responsibilities as a delivery partner.</span>
+                    </label>
+
+                    <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                      <button type="button" className="btn btn-ghost" onClick={() => setShowOnboarding(false)} style={{ flex: 1 }}>Cancel</button>
+                      <button type="submit" className="btn btn-primary" disabled={onboardingLoading || !onboardingForm.acceptTerms} style={{ flex: 2 }}>
+                        {onboardingLoading ? 'Registering...' : 'Register as Partner'}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
