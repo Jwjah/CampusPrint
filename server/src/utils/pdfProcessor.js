@@ -10,9 +10,9 @@ const DEBUG_MODE = false;
 
 // Configurable Printer Profile object (in mm)
 const PrinterProfile = {
-  printableBottomMarginMM: 3,
+  printableBottomMarginMM: 0,
   footerHeightMM: 10,
-  footerBottomPaddingMM: 1,
+  footerBottomPaddingMM: 0,
   separatorGapMM: 2,
 };
 
