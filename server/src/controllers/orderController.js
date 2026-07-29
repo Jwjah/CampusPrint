@@ -81,8 +81,8 @@ exports.createOrder = async (req, res) => {
     // Generate unique hash
     const orderHash = generateOrderHash(Date.now(), req.user.id);
 
-    // Generate random 6-digit numeric verification codes
-    const pickupCode = generateOTP();
+    // Generate random verification codes: Alphanumeric for Pickup, 6-digit numeric for Delivery
+    const pickupCode = `CP${orderHash.substring(0, 8).toUpperCase()}`;
     const deliveryCode = delivery_type === 'hostel' ? generateOTP() : null;
 
     // Create order
@@ -405,7 +405,7 @@ exports.verifyPickupByStudent = async (req, res) => {
         return res.status(400).json({ error: 'Invalid QR code. This code is not recognized.' });
       }
     } else if (code) {
-      if (order.pickup_code !== code) {
+      if (!order.pickup_code || order.pickup_code.trim().toUpperCase() !== code.trim().toUpperCase()) {
         return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
       }
     } else {
@@ -453,7 +453,7 @@ exports.verifyDeliveryByStudent = async (req, res) => {
         return res.status(400).json({ error: 'Invalid QR code. This code is not recognized.' });
       }
     } else if (code) {
-      if (order.delivery_code !== code) {
+      if (!order.delivery_code || order.delivery_code.trim().toUpperCase() !== code.trim().toUpperCase()) {
         return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
       }
     } else {
@@ -944,7 +944,7 @@ exports.reorderOrder = async (req, res) => {
     // 7. Insert new order in a transaction block
     const newOrderId = await db.transaction(async (conn) => {
       const newOrderHash = generateOrderHash(Date.now(), req.user.id);
-      const pickupCode = generateOTP();
+      const pickupCode = `CP${newOrderHash.substring(0, 8).toUpperCase()}`;
       const deliveryCode = oldOrder.delivery_type === 'hostel' ? generateOTP() : null;
       
       const [result] = await conn.execute(

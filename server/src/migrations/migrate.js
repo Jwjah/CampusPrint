@@ -740,8 +740,8 @@ const migrate = async () => {
       agent_id INT DEFAULT NULL,
       pickup_qr TEXT DEFAULT NULL,
       delivery_qr TEXT DEFAULT NULL,
-      pickup_code VARCHAR(6) DEFAULT NULL,
-      delivery_code VARCHAR(6) DEFAULT NULL,
+      pickup_code VARCHAR(20) DEFAULT NULL,
+      delivery_code VARCHAR(20) DEFAULT NULL,
       pickup_verified_by INT DEFAULT NULL,
       pickup_verified_at TIMESTAMP NULL,
       delivery_verified_by INT DEFAULT NULL,
@@ -1419,12 +1419,14 @@ const migrate = async () => {
     `ALTER TABLE orders ADD COLUMN price_color_used DECIMAL(10,2) DEFAULT 5.00`,
     `ALTER TABLE orders ADD COLUMN price_binding_used DECIMAL(10,2) DEFAULT 30.00`,
     `ALTER TABLE orders ADD COLUMN price_stick_file_used DECIMAL(10,2) DEFAULT 10.00`,
-    `ALTER TABLE orders ADD COLUMN pickup_code VARCHAR(6) DEFAULT NULL`,
-    `ALTER TABLE orders ADD COLUMN delivery_code VARCHAR(6) DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN pickup_code VARCHAR(20) DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN delivery_code VARCHAR(20) DEFAULT NULL`,
     `ALTER TABLE orders ADD COLUMN pickup_verified_by INT DEFAULT NULL`,
     `ALTER TABLE orders ADD COLUMN pickup_verified_at TIMESTAMP NULL`,
     `ALTER TABLE orders ADD COLUMN delivery_verified_by INT DEFAULT NULL`,
-    `ALTER TABLE orders ADD COLUMN delivery_verified_at TIMESTAMP NULL`
+    `ALTER TABLE orders ADD COLUMN delivery_verified_at TIMESTAMP NULL`,
+    `ALTER TABLE orders MODIFY COLUMN pickup_code VARCHAR(20) DEFAULT NULL`,
+    `ALTER TABLE orders MODIFY COLUMN delivery_code VARCHAR(20) DEFAULT NULL`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { console.warn('Alter table warning:', e.message); } // Ignore if column already exists or command unsupported

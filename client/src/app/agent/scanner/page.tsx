@@ -43,15 +43,15 @@ export default function AgentScannerPage() {
 
   const handleManualVerify = async () => {
     if (!manualOrderId.trim()) { setCodeError('Order ID is required.'); return; }
-    if (!manualCode || manualCode.length !== 6) { setCodeError('Please enter a valid 6-digit verification code.'); return; }
+    if (!manualCode.trim()) { setCodeError('Verification code is required.'); return; }
     setCodeError(null);
     setLoading(true);
     try {
       if (scanType === 'pickup') {
-        await api.post('/agent/verify-pickup', { orderId: manualOrderId.trim(), code: manualCode });
+        await api.post('/agent/verify-pickup', { orderId: manualOrderId.trim(), code: manualCode.trim() });
         toast.success('✅ Pickup verified! Order is now in transit.');
       } else {
-        await api.post('/agent/verify-delivery', { orderId: manualOrderId.trim(), code: manualCode });
+        await api.post('/agent/verify-delivery', { orderId: manualOrderId.trim(), code: manualCode.trim() });
         toast.success('✅ Delivery verified! Earnings credited.');
       }
       setManualOrderId('');
@@ -119,12 +119,19 @@ export default function AgentScannerPage() {
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', display: 'block', marginBottom: 6 }}>
-                  {scanType === 'pickup' ? 'Shop Pickup Code' : 'Delivery Code'} (6-digit from printed document)
+                  {scanType === 'pickup' ? 'Shop Pickup Code' : 'Delivery Code'} (from printed document)
                 </label>
-                <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} className="input" placeholder="• • • • • •" value={manualCode} onChange={e => { setManualCode(e.target.value.replace(/\D/g, '')); setCodeError(null); }} style={{ textAlign: 'center', fontSize: 28, letterSpacing: 10, fontWeight: 700, width: '100%' }} />
+                <input 
+                  type="text" 
+                  className="input" 
+                  placeholder={scanType === 'pickup' ? "e.g. CP7D7C3E79" : "e.g. 123456"} 
+                  value={manualCode} 
+                  onChange={e => { setManualCode(e.target.value); setCodeError(null); }} 
+                  style={{ textAlign: 'center', fontSize: 20, letterSpacing: 2, fontWeight: 700, width: '100%' }} 
+                />
               </div>
               {codeError && <p style={{ color: 'var(--error)', fontSize: 13, margin: 0 }}>{codeError}</p>}
-              <button className={`btn ${scanType === 'pickup' ? 'btn-primary' : 'btn-success'}`} style={{ width: '100%', height: 56, fontSize: 16 }} onClick={handleManualVerify} disabled={loading || !manualOrderId.trim() || manualCode.length !== 6}>
+              <button className={`btn ${scanType === 'pickup' ? 'btn-primary' : 'btn-success'}`} style={{ width: '100%', height: 56, fontSize: 16 }} onClick={handleManualVerify} disabled={loading || !manualOrderId.trim() || !manualCode.trim()}>
                 {loading ? 'Verifying...' : `✓ Verify ${scanType === 'pickup' ? 'Pickup' : 'Delivery'}`}
               </button>
             </div>

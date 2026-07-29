@@ -187,8 +187,8 @@ export default function OrdersPage() {
   };
 
   const handleVerifyByCode = async (type: 'pickup' | 'delivery') => {
-    if (!verifyCodeInput || verifyCodeInput.length !== 6) {
-      setVerifyError('Please enter a valid 6-digit code.');
+    if (!verifyCodeInput.trim()) {
+      setVerifyError('Please enter a valid verification code.');
       return;
     }
     const orderId = selected?.id;
@@ -447,20 +447,17 @@ export default function OrdersPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
                       className="input"
-                      placeholder="Enter 6-digit code"
+                      placeholder="Enter verification code (e.g. CP7D7C3E79)"
                       value={verifyCodeInput}
-                      onChange={e => { setVerifyCodeInput(e.target.value.replace(/\D/g, '')); setVerifyError(null); }}
-                      style={{ textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: 700 }}
+                      onChange={e => { setVerifyCodeInput(e.target.value); setVerifyError(null); }}
+                      style={{ textAlign: 'center', fontSize: 20, letterSpacing: 2, fontWeight: 700 }}
                       autoFocus
                     />
                     {verifyError && <p style={{ color: 'var(--error)', fontSize: 12, textAlign: 'center' }}>{verifyError}</p>}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <TapButton className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setVerifyMode(null); setVerifyCodeInput(''); setVerifyError(null); }}>Cancel</TapButton>
-                      <TapButton className="btn btn-primary" style={{ flex: 2, background: 'var(--success)' }} onClick={() => handleVerifyByCode('pickup')} disabled={isVerifying || verifyCodeInput.length !== 6}>
+                      <TapButton className="btn btn-primary" style={{ flex: 2, background: 'var(--success)' }} onClick={() => handleVerifyByCode('pickup')} disabled={isVerifying || !verifyCodeInput.trim()}>
                         {isVerifying ? 'Verifying...' : '✓ Verify Code'}
                       </TapButton>
                     </div>
@@ -485,20 +482,17 @@ export default function OrdersPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
                       className="input"
-                      placeholder="Enter 6-digit code"
+                      placeholder="Enter verification code (e.g. 123456)"
                       value={verifyCodeInput}
-                      onChange={e => { setVerifyCodeInput(e.target.value.replace(/\D/g, '')); setVerifyError(null); }}
-                      style={{ textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: 700 }}
+                      onChange={e => { setVerifyCodeInput(e.target.value); setVerifyError(null); }}
+                      style={{ textAlign: 'center', fontSize: 20, letterSpacing: 2, fontWeight: 700 }}
                       autoFocus
                     />
                     {verifyError && <p style={{ color: 'var(--error)', fontSize: 12, textAlign: 'center' }}>{verifyError}</p>}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <TapButton className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setVerifyMode(null); setVerifyCodeInput(''); setVerifyError(null); }}>Cancel</TapButton>
-                      <TapButton className="btn btn-primary" style={{ flex: 2, background: 'var(--success)' }} onClick={() => handleVerifyByCode('delivery')} disabled={isVerifying || verifyCodeInput.length !== 6}>
+                      <TapButton className="btn btn-primary" style={{ flex: 2, background: 'var(--success)' }} onClick={() => handleVerifyByCode('delivery')} disabled={isVerifying || !verifyCodeInput.trim()}>
                         {isVerifying ? 'Verifying...' : '✓ Verify Code'}
                       </TapButton>
                     </div>

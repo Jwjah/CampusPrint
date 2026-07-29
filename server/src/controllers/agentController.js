@@ -149,7 +149,7 @@ exports.verifyPickup = async (req, res) => {
         return res.status(400).json({ error: 'Invalid QR code. This code is not recognized.' });
       }
     } else if (code) {
-      if (order.pickup_code !== code) {
+      if (!order.pickup_code || order.pickup_code.trim().toUpperCase() !== code.trim().toUpperCase()) {
         return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
       }
     } else {
@@ -216,7 +216,7 @@ exports.verifyDelivery = async (req, res) => {
         return res.status(400).json({ error: 'Invalid QR code. This code is not recognized in the system.' });
       }
     } else if (code) {
-      if (order.delivery_code !== code) {
+      if (!order.delivery_code || order.delivery_code.trim().toUpperCase() !== code.trim().toUpperCase()) {
         return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
       }
     } else {
@@ -275,16 +275,15 @@ exports.verifyDelivery = async (req, res) => {
 exports.getEarnings = async (req, res) => {
   try {
     const agentId = parseInt(req.user.id);
-    // FAIL-SAFE: Pull earnings from deliveries, but wallet from users
     const [earnRows] = await db.execute(
       `SELECT 
-        (SELECT COALESCE(SUM(earnings), 0) FROM deliveries WHERE agent_id = ? AND status = 'delivered') as total_earned_deliveries,
-        (SELECT COUNT(*) FROM deliveries WHERE agent_id = ? AND status = 'delivered') as total_deliveries,
-        (SELECT wallet_balance FROM users WHERE id = ?) as current_wallet
+        (SELECT wallet_balance FROM users WHERE id = ?) as wallet_balance,
+        (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE user_id = ? AND type = 'credit') as total_earned,
+        (SELECT COUNT(*) FROM deliveries WHERE agent_id = ? AND status = 'delivered') as total_deliveries
       `,
       [agentId, agentId, agentId]
     );
-    const stats = earnRows[0] || { total_earned_deliveries: 0, total_deliveries: 0, current_wallet: 0 };
+    const stats = earnRows[0] || { wallet_balance: 0, total_earned: 0, total_deliveries: 0 };
     
     const [recent] = await db.execute(
       `SELECT d.id as delivery_id, d.status, d.earnings, d.delivery_time, d.created_at as delivery_date,
@@ -298,9 +297,13 @@ exports.getEarnings = async (req, res) => {
     );
 
     res.json({
+      total_earned: parseFloat(stats.total_earned || 0),
+      total_deliveries: parseInt(stats.total_deliveries || 0),
+      wallet_balance: parseFloat(stats.wallet_balance || 0),
       earnings: { 
-        total_earned: parseFloat(stats.current_wallet || stats.total_earned_deliveries || 0), 
-        total_deliveries: parseInt(stats.total_deliveries || 0) 
+        total_earned: parseFloat(stats.total_earned || 0), 
+        total_deliveries: parseInt(stats.total_deliveries || 0),
+        wallet_balance: parseFloat(stats.wallet_balance || 0)
       },
       recent,
     });
