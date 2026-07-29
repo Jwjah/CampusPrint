@@ -7,10 +7,10 @@ const { sendPushToUser } = require('../services/pushService');
 // POST /api/orders — Create a new order
 exports.createOrder = async (req, res) => {
   try {
-    const { shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, notes } = req.body;
+    const { shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, notes, reuse_file_ids } = req.body;
     const files = req.files;
 
-    if (!files || files.length === 0) {
+    if ((!files || files.length === 0) && (!reuse_file_ids || reuse_file_ids.length === 0)) {
       return res.status(400).json({ error: 'At least one file is required' });
     }
 
@@ -28,33 +28,64 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ error: 'This shop is currently closed. Please choose another shop.' });
     }
 
-    // Extract page counts from PDFs and upload to Cloudinary
+    // Extract page counts from PDFs and upload to Cloudinary (for newly uploaded files)
     let totalPages = 0;
     const fileRecords = [];
 
-    for (const file of files) {
-      let pageCount = 1;
-      if (file.mimetype === 'application/pdf') {
-        try {
-          const pdfDoc = await PDFDocument.load(file.buffer);
-          pageCount = pdfDoc.getPageCount();
-        } catch (e) {
-          console.warn('PDF page count failed for', file.originalname);
+    if (files && files.length > 0) {
+      for (const file of files) {
+        let pageCount = 1;
+        if (file.mimetype === 'application/pdf') {
+          try {
+            const pdfDoc = await PDFDocument.load(file.buffer);
+            pageCount = pdfDoc.getPageCount();
+          } catch (e) {
+            console.warn('PDF page count failed for', file.originalname);
+          }
+        }
+        totalPages += pageCount;
+
+        // Upload to Cloudinary
+        const cloudResult = await uploadToCloudinary(file.buffer, file.originalname);
+
+        fileRecords.push({
+          original_name: file.originalname,
+          stored_name: cloudResult.public_id,
+          file_path: cloudResult.url,
+          file_size: file.size,
+          mime_type: file.mimetype,
+          page_count: pageCount,
+        });
+      }
+    }
+
+    // Process reused files
+    if (reuse_file_ids) {
+      let ids = [];
+      try {
+        ids = typeof reuse_file_ids === 'string' ? JSON.parse(reuse_file_ids) : reuse_file_ids;
+      } catch (e) {
+        ids = [reuse_file_ids];
+      }
+
+      if (ids && ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        const [existingFiles] = await db.execute(
+          `SELECT * FROM order_files WHERE id IN (${placeholders})`,
+          ids
+        );
+        for (const ef of existingFiles) {
+          totalPages += ef.page_count;
+          fileRecords.push({
+            original_name: ef.original_name,
+            stored_name: ef.stored_name,
+            file_path: ef.file_path,
+            file_size: ef.file_size,
+            mime_type: ef.mime_type,
+            page_count: ef.page_count,
+          });
         }
       }
-      totalPages += pageCount;
-
-      // Upload to Cloudinary
-      const cloudResult = await uploadToCloudinary(file.buffer, file.originalname);
-
-      fileRecords.push({
-        original_name: file.originalname,
-        stored_name: cloudResult.public_id,
-        file_path: cloudResult.url,
-        file_size: file.size,
-        mime_type: file.mimetype,
-        page_count: pageCount,
-      });
     }
 
     const bindingType = req.body.binding_type || 'none';

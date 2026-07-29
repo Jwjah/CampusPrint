@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { TapButton, StaggerContainer, StaggerItem, HoverCard, PageTransition } from '@/components/animations';
@@ -32,7 +32,10 @@ const loadRazorpayScript = () => {
 
 export default function NewOrderPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reorderId = searchParams.get('reorder');
   const [files, setFiles] = useState<File[]>([]);
+  const [reusedFiles, setReusedFiles] = useState<any[]>([]);
   const [shops, setShops] = useState<any[]>([]);
   const [selectedShop, setSelectedShop] = useState<number | null>(null);
   const [config, setConfig] = useState({
@@ -45,6 +48,67 @@ export default function NewOrderPage() {
   const [step, setStep] = useState(1);
   const [editingFileIndex, setEditingFileIndex] = useState<number | null>(null);
   const [agreedToDisclaimer, setAgreedToDisclaimer] = useState(false);
+
+  useEffect(() => {
+    if (reorderId) {
+      api.get(`/orders/${reorderId}`)
+        .then(({ data }) => {
+          const order = data.order;
+          if (!order) return;
+
+          // Parse notes format
+          const notes = order.notes || '';
+          let paper = 'A4';
+          let orientation = 'portrait';
+          let pagesPerSheet = '1';
+          let bindingType = 'none';
+          let userNotes = notes;
+
+          const formatMatch = notes.match(/^\[Format:\s*([^,]+),\s*([^,]+),\s*([^p]+)\s*pg\/sheet,\s*Binding:\s*([^\]]+)\]\n?/i);
+          if (formatMatch) {
+            paper = formatMatch[1].trim();
+            orientation = formatMatch[2].trim();
+            pagesPerSheet = formatMatch[3].trim();
+            bindingType = formatMatch[4].trim();
+            userNotes = notes.replace(formatMatch[0], '').trim();
+          }
+
+          // Pre-fill selected shop
+          setSelectedShop(order.shop_id);
+
+          // Pre-fill print config
+          setConfig({
+            print_type: order.print_type || 'bw',
+            layout: order.layout || 'single',
+            copies: order.copies || 1,
+            binding: !!order.binding,
+            paper,
+            orientation,
+            pages_per_sheet: pagesPerSheet,
+            binding_type: bindingType,
+            delivery_type: order.delivery_type || 'pickup',
+            hostel_address: order.hostel_address || '',
+            notes: userNotes,
+          });
+
+          // Pre-fill files
+          if (order.files) {
+            setReusedFiles(order.files.map((f: any) => ({
+              id: f.id,
+              name: f.name,
+              pages: f.pages,
+              size: f.size,
+              isReused: true
+            })));
+          }
+          toast.success('Past order settings preloaded!');
+        })
+        .catch(err => {
+          console.error('Failed to load reorder details:', err);
+          toast.error('Failed to preload order settings.');
+        });
+    }
+  }, [reorderId]);
 
   const loadShops = () => {
     api.get('/shops').then(({ data }) => setShops(data.shops || [])).catch(() => {});
@@ -79,8 +143,8 @@ export default function NewOrderPage() {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
   const handleSubmit = async () => {
-    if (!selectedShop || files.length === 0) {
-      toast.error('Select a shop and upload files');
+    if (!selectedShop || (files.length === 0 && reusedFiles.length === 0)) {
+      toast.error('Select a shop and upload or preload files');
       return;
     }
     if (config.delivery_type === 'hostel') {
@@ -105,6 +169,9 @@ export default function NewOrderPage() {
       const formData = new FormData();
       files.forEach(f => formData.append('files', f));
       formData.append('shop_id', String(selectedShop));
+      if (reusedFiles.length > 0) {
+        formData.append('reuse_file_ids', JSON.stringify(reusedFiles.map(rf => rf.id)));
+      }
       
       const finalConfig = { ...config };
       finalConfig.binding = config.binding_type !== 'none';
@@ -189,7 +256,7 @@ export default function NewOrderPage() {
               fontSize: 13, fontWeight: 600, color: step >= i + 1 ? 'white' : 'var(--text-tertiary)',
               cursor: 'pointer',
             }}
-            onClick={() => { if (i + 1 <= step || (i + 1 === 2 && files.length > 0) || (i + 1 === 3 && selectedShop)) setStep(i + 1); }}
+            onClick={() => { if (i + 1 <= step || (i + 1 === 2 && (files.length > 0 || reusedFiles.length > 0)) || (i + 1 === 3 && selectedShop)) setStep(i + 1); }}
           >
             {label}
           </motion.div>
@@ -220,8 +287,33 @@ export default function NewOrderPage() {
             </motion.div>
 
             <AnimatePresence>
-              {files.length > 0 && (
+              {(files.length > 0 || reusedFiles.length > 0) && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* Reused Files */}
+                  {reusedFiles.map((file, i) => (
+                    <motion.div
+                      key={`reused-${file.id}-${i}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20, height: 0 }}
+                      className="glass-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px dashed var(--primary-light)' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <HiOutlineDocument size={20} style={{ color: 'var(--primary-light)' }} />
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ fontSize: 14, fontWeight: 500 }}>{file.name}</div>
+                            <span style={{ fontSize: 10, background: 'var(--primary-glow)', color: 'var(--primary-light)', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>PREVIOUS PDF</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{formatSize(file.size)} • {file.pages} pages</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <motion.button whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.8 }} onClick={() => setReusedFiles(prev => prev.filter((_, idx) => idx !== i))} className="btn btn-ghost btn-icon" style={{ color: 'var(--error)', padding: 4 }}>
+                          <HiOutlineX size={18} />
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  ))}
+
+                  {/* Local Files */}
                   {files.map((file, i) => (
                     <motion.div
                       key={`${file.name}-${i}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20, height: 0 }}
@@ -264,7 +356,11 @@ export default function NewOrderPage() {
             </AnimatePresence>
 
             <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
-              <TapButton className="btn btn-primary btn-lg" onClick={() => files.length > 0 ? setStep(2) : toast.error('Upload at least one file')} disabled={files.length === 0}>
+              <TapButton 
+                className="btn btn-primary btn-lg" 
+                onClick={() => (files.length > 0 || reusedFiles.length > 0) ? setStep(2) : toast.error('Upload or preload at least one file')} 
+                disabled={files.length === 0 && reusedFiles.length === 0}
+              >
                 Next: Select Shop →
               </TapButton>
             </div>

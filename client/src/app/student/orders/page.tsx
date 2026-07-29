@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 import { StaggerContainer, StaggerItem, HoverCard, ModalOverlay, TapButton } from '@/components/animations';
 import QRScanner from '@/components/QRScanner';
 import { HiOutlineSearch } from 'react-icons/hi';
@@ -37,6 +38,7 @@ const loadRazorpayScript = () => {
 };
 
 export default function OrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
@@ -104,17 +106,8 @@ export default function OrdersPage() {
     }
   };
 
-  const handleReorder = async (oldOrder: any) => {
-    setIsReordering(true);
-    try {
-      const { data } = await api.post(`/orders/${oldOrder.id}/reorder`);
-      toast.success('Order duplicated successfully! Initiating payment...');
-      await handlePay(data.order);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Reorder failed');
-    } finally {
-      setIsReordering(false);
-    }
+  const handleReorder = (oldOrder: any) => {
+    router.push(`/student/new-order?reorder=${oldOrder.id}`);
   };
 
   const loadOrders = (background = false) => {
