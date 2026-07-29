@@ -122,6 +122,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingForm, setOnboardingForm] = useState({ phone: '', hostel: '', room_number: '', acceptTerms: false });
   const [onboardingLoading, setOnboardingLoading] = useState(false);
+  useEffect(() => {
+    setShowOnboarding(false);
+  }, [pathname]);
 
   useEffect(() => {
     loadUser();
@@ -159,7 +162,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [user, pathname, router]);
 
   useEffect(() => {
-    if (user) {
+    if (showOnboarding && user) {
       setOnboardingForm({
         phone: user.phone || '',
         hostel: user.hostel || '',
@@ -167,10 +170,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         acceptTerms: false
       });
     }
-  }, [user]);
+  }, [showOnboarding, user?.id]);
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       const fetchNotifs = () => {
         api.get('/admin/notifications').then(({ data }) => {
           setNotifCount(data.unread);
@@ -183,7 +186,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const interval = setInterval(fetchNotifs, 30000);
       return () => clearInterval(interval);
     }
-  }, [user, pathname, loadUser]);
+  }, [user?.id, pathname, loadUser]);
 
   const handleRegisterAgent = async (e: React.FormEvent) => {
     e.preventDefault();

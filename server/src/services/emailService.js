@@ -122,14 +122,21 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
 
   // 3. Try SMTP fallback
   if (transporter) {
-    const info = await transporter.sendMail({
-      from: `"CampusPrint" <${SENDER_EMAIL}>`,
-      to: email,
-      subject: subjects[purpose] || subjects.verification,
-      html: html,
-    });
-    console.log(`📧 OTP email sent to ${email} via SMTP (messageId: ${info.messageId})`);
-    return;
+    try {
+      const info = await transporter.sendMail({
+        from: `"CampusPrint" <${SENDER_EMAIL}>`,
+        to: email,
+        subject: subjects[purpose] || subjects.verification,
+        html: html,
+      });
+      console.log(`📧 OTP email sent to ${email} via SMTP (messageId: ${info.messageId})`);
+      return;
+    } catch (smtpErr) {
+      console.error('❌ SMTP transport error:', smtpErr.message);
+      if (process.env.NODE_ENV === 'production') {
+        throw smtpErr;
+      }
+    }
   }
 
   // Fallback for development (allow to bypass in dev but fail in prod if no keys configured)
