@@ -16,6 +16,10 @@ export default function AgentDashboard() {
   const [pickupQrMission, setPickupQrMission] = useState<any>(null);
   const [scannerOpen, setScannerOpen] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCodeInput, setActiveCodeInput] = useState<number | null>(null);
+  const [pickupCodeInput, setPickupCodeInput] = useState('');
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const loadData = (background = false) => {
     if (!background) setLoading(true);
@@ -63,6 +67,26 @@ export default function AgentDashboard() {
       toast.error(errorMsg);
       // Re-open scanner so agent can try again
       setScannerOpen(orderId);
+    }
+  };
+
+  const handleCodeVerify = async (orderId: number) => {
+    if (!pickupCodeInput.trim()) {
+      setCodeError('Please enter the pickup code.');
+      return;
+    }
+    setIsVerifyingCode(true);
+    setCodeError(null);
+    try {
+      await api.post('/agent/verify-pickup', { orderId, code: pickupCodeInput.trim() });
+      toast.success('✅ Pickup verified! Head to the student now.');
+      setActiveCodeInput(null);
+      setPickupCodeInput('');
+      loadData();
+    } catch (err: any) {
+      setCodeError(err.response?.data?.error || 'Verification failed. Check the code.');
+    } finally {
+      setIsVerifyingCode(false);
     }
   };
 
@@ -175,43 +199,84 @@ export default function AgentDashboard() {
                   💰 ₹{parseFloat(m.earnings || 0).toFixed(0)} earning for this delivery
                 </div>
 
-                {/* Action buttons */}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
                   {m.status === 'assigned' && (
-                    <>
-                      {/* Show pickup QR first so agent can verify it matches the shop's screen */}
-                      {m.pickup_qr && (
+                    activeCodeInput === m.order_id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="Enter pickup code (e.g. CP7D7C3E79)"
+                          value={pickupCodeInput}
+                          onChange={e => { setPickupCodeInput(e.target.value); setCodeError(null); }}
+                          style={{ fontSize: 14, fontWeight: 700, width: '100%' }}
+                          autoFocus
+                        />
+                        {codeError && <p style={{ color: 'var(--error)', fontSize: 12, margin: 0 }}>{codeError}</p>}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button 
+                            className="btn btn-secondary btn-sm" 
+                            style={{ flex: 1 }} 
+                            onClick={() => { setActiveCodeInput(null); setPickupCodeInput(''); setCodeError(null); }}
+                          >
+                            Cancel
+                          </button>
+                          <button 
+                            className="btn btn-primary btn-sm" 
+                            style={{ flex: 2, background: 'var(--success)' }} 
+                            onClick={() => handleCodeVerify(m.order_id)} 
+                            disabled={isVerifyingCode || !pickupCodeInput.trim()}
+                          >
+                            {isVerifyingCode ? 'Verifying...' : '✓ Verify Code'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                        {m.pickup_qr && (
+                          <button
+                            onClick={() => setPickupQrMission(m)}
+                            className="btn btn-ghost btn-sm"
+                            style={{ border: '1px solid var(--border)', flex: 1 }}
+                          >
+                            📋 View Shop QR
+                          </button>
+                        )}
                         <button
-                          onClick={() => setPickupQrMission(m)}
-                          className="btn btn-ghost btn-sm"
-                          style={{ border: '1px solid var(--border)' }}
+                          onClick={() => setScannerOpen(m.order_id)}
+                          className="btn btn-primary btn-sm"
+                          style={{ flex: 1 }}
                         >
-                          📋 View Shop QR
+                          📷 Scan Shop QR
                         </button>
-                      )}
-                      <button
-                        onClick={() => setScannerOpen(m.order_id)}
-                        className="btn btn-primary btn-sm"
-                      >
-                        📷 Scan Shop QR
-                      </button>
-                      <button
-                        onClick={() => dropGig(m.order_id)}
-                        className="btn btn-ghost btn-icon"
-                        style={{ color: 'var(--error)', background: 'rgba(239, 68, 68, 0.1)', padding: 6, width: 32, height: 32 }}
-                        title="Drop Mission"
-                      >
-                        <HiOutlineX size={16} />
-                      </button>
-                    </>
+                        <button
+                          onClick={() => { setActiveCodeInput(m.order_id); setPickupCodeInput(''); setCodeError(null); }}
+                          className="btn btn-secondary btn-sm"
+                          style={{ flex: 1 }}
+                        >
+                          🔢 Enter Code
+                        </button>
+                        <button
+                          onClick={() => dropGig(m.order_id)}
+                          className="btn btn-ghost btn-icon"
+                          style={{ color: 'var(--error)', background: 'rgba(239, 68, 68, 0.1)', padding: 6, width: 32, height: 32, flexShrink: 0 }}
+                          title="Drop Mission"
+                        >
+                          <HiOutlineX size={16} />
+                        </button>
+                      </div>
+                    )
                   )}
                   {m.status === 'in_transit' && (
-                    <button
-                      onClick={() => setQrModalMission(m)}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      📱 Show Delivery QR to Student
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                      <button
+                        onClick={() => setQrModalMission(m)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ flex: 1 }}
+                      >
+                        📱 Show Delivery QR to Student
+                      </button>
+                    </div>
                   )}
                 </div>
               </HoverCard>
