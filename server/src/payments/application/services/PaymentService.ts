@@ -529,7 +529,15 @@ export class PaymentService implements IPaymentService {
       throw new PaymentValidationError('Webhook verification failed: Invalid webhook signature');
     }
 
-    const eventId = payload.id;
+    const eventIdHeader = headers?.['x-razorpay-event-id'];
+    const eventId = Array.isArray(eventIdHeader)
+      ? eventIdHeader[0]
+      : eventIdHeader || payload.id;
+
+    if (!eventId) {
+      throw new PaymentValidationError('Missing Razorpay webhook event ID');
+    }
+
     const eventType = payload.event;
     
     // We only support payment.captured and payment.failed. Ignore unknown events safely.
