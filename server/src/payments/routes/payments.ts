@@ -7,6 +7,7 @@ import { SqlOrderRepository } from '../infrastructure/persistence/SqlOrderReposi
 import { SqlInvoiceRepository } from '../infrastructure/persistence/SqlInvoiceRepository';
 import { SqlPrintJobRepository } from '../infrastructure/persistence/SqlPrintJobRepository';
 import { RazorpayGateway } from '../infrastructure/gateways/RazorpayGateway';
+import { SqlWebhookEventRepository } from '../infrastructure/persistence/SqlWebhookEventRepository';
 import { EventDispatcher } from '../application/events/EventDispatcher';
 import { OutboxWorker } from '../application/events/OutboxWorker';
 import { OrderFinalizationService } from '../application/services/OrderFinalizationService';
@@ -27,11 +28,12 @@ const outboxRepository  = new SqlOutboxRepository();
 const orderRepository   = new SqlOrderRepository();
 const invoiceRepository = new SqlInvoiceRepository();
 const printJobRepository = new SqlPrintJobRepository();
-const paymentGateway    = new RazorpayGateway();
+const paymentGateway            = new RazorpayGateway();
+const webhookEventRepository    = new SqlWebhookEventRepository();
 
 // ── Application Services ────────────────────────────────────────────────────
 const invoiceNumberGenerator   = new InvoiceNumberGenerator();
-const paymentService           = new PaymentService(paymentRepository, paymentGateway);
+const paymentService           = new PaymentService(paymentRepository, paymentGateway, webhookEventRepository);
 const orderFinalizationService = new OrderFinalizationService(
   paymentRepository,
   orderRepository,
