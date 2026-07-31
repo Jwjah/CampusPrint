@@ -1,0 +1,6 @@
+{
+    "name": "nano_banana",
+    "description": "Enables agentic image generation and inpainting using Nano Banana models.",
+    "version": "1.0.0",
+    "entrypoint": "main.py"
+}
