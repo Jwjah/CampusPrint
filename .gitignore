@@ -29,9 +29,29 @@ Thumbs.db
 venv/
 *.zip
 uploads/
-server/data/campus.db-shm
-server/data/campus.db-wal
-server/data/campus.db
+server/data/campus.db*
+server/campus_print.db
 .vercel
 .env*.local
+.env.*
 server/dist-test/
+
+# Certificates and keys
+*.pem
+*.key
+*.p12
+*.crt
+
+# Service account files
+service-account.json
+firebase-admin*.json
+credentials.json
+
+# Android local files and caches
+android-app/local.properties
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+
+# Mirror backup
+campusprint-backup.git/

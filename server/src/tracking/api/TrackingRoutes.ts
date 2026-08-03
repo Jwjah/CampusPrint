@@ -78,7 +78,6 @@ export function createTrackingRouter(
       authorize('admin'),
       replayController.triggerReplay
     );
-
     router.post(
       '/internal/projection/replay/pause',
       authenticate,
