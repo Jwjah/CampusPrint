@@ -44,10 +44,11 @@ const generateQRCode = async (payload) => {
 };
 
 /**
- * Generate a 6-digit OTP
+ * Generate a 6-digit cryptographically secure OTP
  */
 const generateOTP = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // Use CSPRNG — Math.random() is NOT safe for security tokens
+  return require('crypto').randomInt(100000, 999999).toString();
 };
 
 // Centralized pricing configuration

@@ -122,6 +122,16 @@ exports.getShopStats = async (req, res) => {
   try {
     const shopId = req.params.id;
 
+    // Auth verification & ownership check:
+    if (req.user.role === 'shop') {
+      const [shops] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [req.user.id]);
+      if (!shops.length || String(shops[0].id) !== String(shopId)) {
+        return res.status(403).json({ error: 'Unauthorized to access this shop stats' });
+      }
+    } else if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized to access this shop stats' });
+    }
+
     const [[{ total }]] = await db.execute('SELECT COUNT(*) as total FROM orders WHERE shop_id = ?', [shopId]);
     const [[{ pending }]] = await db.execute("SELECT COUNT(*) as pending FROM orders WHERE shop_id = ? AND status = 'pending'", [shopId]);
     const [[{ printing }]] = await db.execute("SELECT COUNT(*) as printing FROM orders WHERE shop_id = ? AND status = 'printing'", [shopId]);
@@ -230,7 +240,13 @@ exports.triggerPrint = async (req, res) => {
     }
     const order = orders[0];
 
-    // Get order files
+    // Verify the order belongs to this shop and is PAID before allowing print trigger
+    if (order.shop_id !== shops[0].id) {
+      return res.status(403).json({ error: 'This order does not belong to your shop' });
+    }
+    if (order.payment_status !== 'PAID') {
+      return res.status(400).json({ error: 'Cannot print an unpaid order' });
+    }
     const [files] = await db.execute('SELECT * FROM order_files WHERE order_id = ?', [orderId]);
     if (!files.length) {
       return res.status(404).json({ error: 'No files found for this order' });
@@ -259,7 +275,8 @@ exports.triggerPrint = async (req, res) => {
         orderId,
         fileId: file.id,
         fileName: file.original_name,
-        fileUrl: `${baseUrl}/orders/files/${file.id}/print-pdf?token=${token}`,
+        // Token is NOT embedded in the URL — the print agent uses its own stored auth token from config.json
+        fileUrl: `${baseUrl}/orders/files/${file.id}/print-pdf`,
         copies: order.copies || 1,
         printType: order.print_type || 'bw',
         layout: order.layout || 'single',
@@ -308,7 +325,7 @@ exports.downloadPrintAgent = async (req, res) => {
     }
 
     const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Retrieve shop details for this user
     const [shops] = await db.execute('SELECT * FROM shops WHERE user_id = ?', [decoded.id]);

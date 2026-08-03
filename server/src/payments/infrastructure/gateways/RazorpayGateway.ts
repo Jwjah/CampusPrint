@@ -11,9 +11,14 @@ export class RazorpayGateway implements IPaymentGateway {
   private readonly MAX_RETRIES = 3;
 
   constructor(razorpayClient?: any) {
+    if (!razorpayClient && (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET)) {
+      if (process.env.NODE_ENV !== 'test') {
+        throw new Error('Razorpay credentials missing: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set');
+      }
+    }
     this.razorpay = razorpayClient || new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key',
-      key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret'
+      key_id: process.env.RAZORPAY_KEY_ID || 'test_mode_missing_key',
+      key_secret: process.env.RAZORPAY_KEY_SECRET || 'test_mode_missing_secret'
     });
   }
 
@@ -94,7 +99,8 @@ export class RazorpayGateway implements IPaymentGateway {
 
   public async verifyPaymentSignature(orderId: string, paymentId: string, signature: string): Promise<boolean> {
     try {
-      const secret = process.env.RAZORPAY_KEY_SECRET || 'dummy_secret';
+      const secret = process.env.RAZORPAY_KEY_SECRET;
+      if (!secret) throw new Error('RAZORPAY_KEY_SECRET is not configured');
       const text = orderId + '|' + paymentId;
       const generatedSignature = crypto
         .createHmac('sha256', secret)

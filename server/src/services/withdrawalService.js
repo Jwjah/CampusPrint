@@ -2,7 +2,12 @@ const db = require('../config/database');
 const crypto = require('crypto');
 
 const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.PAYOUT_ENCRYPTION_KEY || 'a_very_secure_32_byte_payout_key_12345';
+// PAYOUT_ENCRYPTION_KEY must be set in production (enforced by startup guard in index.js).
+// In development, a deterministic dev key is used with a warning.
+if (!process.env.PAYOUT_ENCRYPTION_KEY && process.env.NODE_ENV !== 'production') {
+  console.warn('⚠️  [withdrawalService] PAYOUT_ENCRYPTION_KEY not set. Using dev-only key. DO NOT use in production.');
+}
+const ENCRYPTION_KEY = process.env.PAYOUT_ENCRYPTION_KEY || 'dev_only_payout_key_not_for_prod_!!';
 const IV_LENGTH = 16;
 
 const encrypt = (text) => {

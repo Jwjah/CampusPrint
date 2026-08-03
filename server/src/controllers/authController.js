@@ -58,7 +58,7 @@ exports.register = async (req, res) => {
     });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ error: err.message || 'Registration failed' });
+    res.status(500).json({ error: 'Registration failed' });
   }
 };
 
@@ -85,7 +85,7 @@ exports.verifyOTP = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '365d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
     const [da] = await db.execute('SELECT agent_id, status FROM delivery_agent_availability WHERE agent_id = ?', [user.id]);
@@ -189,8 +189,8 @@ exports.login = async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'campus_print_secret_fallback_123',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '365d' }
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
     // Force verify admin account
@@ -222,7 +222,7 @@ exports.login = async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: err.message || 'Login failed' });
+    res.status(500).json({ error: 'Login failed' });
   }
 };
 
@@ -246,7 +246,7 @@ exports.resendOTP = async (req, res) => {
     res.json({ message: 'OTP sent successfully' });
   } catch (err) {
     console.error('Resend OTP error:', err);
-    res.status(500).json({ error: err.message || 'Failed to send OTP' });
+    res.status(500).json({ error: 'Failed to send OTP' });
   }
 };
 

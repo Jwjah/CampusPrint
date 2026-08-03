@@ -1,7 +1,7 @@
 const db = require('../config/database');
 const { generateOrderHash, generateQRCode, calculatePrice, generateOTP } = require('../utils/helpers');
 const { PDFDocument } = require('pdf-lib');
-const { uploadToCloudinary } = require('../middleware/upload');
+const { uploadToCloudinary, verifyMagicBytes } = require('../middleware/upload');
 const { sendPushToUser } = require('../services/pushService');
 
 // POST /api/orders — Create a new order
@@ -34,6 +34,11 @@ exports.createOrder = async (req, res) => {
 
     if (files && files.length > 0) {
       for (const file of files) {
+        // Verify actual file content (magic bytes) — blocks spoofed MIME types
+        if (!verifyMagicBytes(file.buffer, file.mimetype)) {
+          return res.status(400).json({ error: `File "${file.originalname}" appears to be invalid or corrupted. Please upload a genuine PDF, image, or Word document.` });
+        }
+
         let pageCount = 1;
         if (file.mimetype === 'application/pdf') {
           try {
@@ -71,8 +76,10 @@ exports.createOrder = async (req, res) => {
       if (ids && ids.length > 0) {
         const placeholders = ids.map(() => '?').join(',');
         const [existingFiles] = await db.execute(
-          `SELECT * FROM order_files WHERE id IN (${placeholders})`,
-          ids
+          `SELECT f.* FROM order_files f 
+           JOIN orders o ON f.order_id = o.id 
+           WHERE f.id IN (${placeholders}) AND o.student_id = ?`,
+          [...ids, req.user.id]
         );
         for (const ef of existingFiles) {
           totalPages += ef.page_count;
@@ -176,7 +183,7 @@ exports.createOrder = async (req, res) => {
     });
   } catch (err) {
     console.error('Create order error:', err);
-    res.status(500).json({ error: 'Failed to create order', details: err.message, stack: err.stack });
+    res.status(500).json({ error: 'Failed to create order' });
   }
 };
 
@@ -280,6 +287,16 @@ exports.getOrder = async (req, res) => {
 
     const order = orders[0];
 
+    // Student security check:
+    if (req.user.role === 'student' && order.student_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized to access this order' });
+    }
+
+    // Agent security check:
+    if (req.user.role === 'agent' && order.agent_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized to access this order' });
+    }
+
     // Shop security check:
     if (req.user.role === 'shop') {
       const [shops] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [req.user.id]);
@@ -314,6 +331,33 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     const order = orders[0];
+
+    // Auth verification & ownership check:
+    if (req.user.role === 'student') {
+      if (order.student_id !== req.user.id) {
+        return res.status(403).json({ error: 'Unauthorized to modify this order' });
+      }
+      // Students can only cancel pending/unpaid orders, or mark them delivered during pickup/delivery verification
+      if (status !== 'cancelled' && status !== 'delivered') {
+        return res.status(400).json({ error: 'Students are only permitted to cancel their orders' });
+      }
+      if (status === 'cancelled' && order.status !== 'pending') {
+        return res.status(400).json({ error: 'Cannot cancel an order that is already in production' });
+      }
+    }
+
+    if (req.user.role === 'shop') {
+      const [shops] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [req.user.id]);
+      if (!shops.length || shops[0].id !== order.shop_id) {
+        return res.status(403).json({ error: 'Unauthorized to modify this order' });
+      }
+    }
+
+    if (req.user.role === 'agent') {
+      // Agents cannot change the status arbitrarily, they can only do it via verify-delivery endpoint
+      return res.status(403).json({ error: 'Unauthorized to modify this order' });
+    }
+
     const updates = { status };
     updates.updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
 

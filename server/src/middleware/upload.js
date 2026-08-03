@@ -18,20 +18,36 @@ cloudinary.config({
 // Use memory storage (files stay in RAM, then get uploaded to Cloudinary)
 const storage = multer.memoryStorage();
 
+/**
+ * Magic bytes map — validates actual file content, not just MIME headers which can be spoofed.
+ * Attackers can rename any file to .pdf and set mimetype: 'application/pdf'.
+ * Reading the first bytes confirms the actual file format.
+ */
+const MAGIC_BYTES = {
+  'application/pdf': [[0x25, 0x50, 0x44, 0x46]], // %PDF
+  'image/jpeg': [[0xFF, 0xD8, 0xFF]],
+  'image/png': [[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]],
+  'image/webp': [[0x52, 0x49, 0x46, 0x46]], // RIFF
+  'application/msword': [[0xD0, 0xCF, 0x11, 0xE0]], // Old .doc format
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [
+    [0x50, 0x4B, 0x03, 0x04], // PK (ZIP header – .docx is a zip)
+  ],
+};
+
+const verifyMagicBytes = (buffer, mimetype) => {
+  const signatures = MAGIC_BYTES[mimetype];
+  if (!signatures) return false; // Unlisted type — reject
+  return signatures.some(sig => sig.every((byte, i) => buffer[i] === byte));
+};
+
 const fileFilter = (req, file, cb) => {
-  const allowed = [
-    'application/pdf',
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  ];
-  if (allowed.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only PDF, images, and Word documents are allowed'), false);
+  const allowed = Object.keys(MAGIC_BYTES);
+  if (!allowed.includes(file.mimetype)) {
+    return cb(new Error('Only PDF, images, and Word documents are allowed'), false);
   }
+  // Magic bytes will be verified in verifyMagicBytes after the buffer is available
+  // (multer fileFilter runs before the full buffer is available, so we do a deferred check)
+  cb(null, true);
 };
 
 const upload = multer({
@@ -93,3 +109,4 @@ const uploadToCloudinary = (fileBuffer, originalName) => {
 
 module.exports = upload;
 module.exports.uploadToCloudinary = uploadToCloudinary;
+module.exports.verifyMagicBytes = verifyMagicBytes;

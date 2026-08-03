@@ -7,7 +7,44 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 require('dotenv').config();
 
+// ── Critical Configuration Guard ────────────────────────────────────────────
+// Crash the process immediately if any required secrets are missing.
+// This prevents the server from launching in a broken or insecure state.
+// Only enforce in production — dev/test can use defaults.
+if (process.env.NODE_ENV === 'production') {
+  const REQUIRED_SECRETS = [
+    { key: 'JWT_SECRET',              label: 'JWT signing secret' },
+    { key: 'JWT_EXPIRES_IN',          label: 'JWT expiration time' },
+    { key: 'DB_HOST',                 label: 'Database host' },
+    { key: 'DB_USER',                 label: 'Database user' },
+    { key: 'DB_PASS',                 label: 'Database password' },
+    { key: 'DB_NAME',                 label: 'Database name' },
+    { key: 'CLIENT_URL',              label: 'Client URL (Frontend)' },
+    { key: 'RAZORPAY_KEY_ID',         label: 'Razorpay key ID' },
+    { key: 'RAZORPAY_KEY_SECRET',     label: 'Razorpay key secret' },
+    { key: 'RAZORPAY_WEBHOOK_SECRET', label: 'Razorpay webhook secret' },
+    { key: 'PAYOUT_ENCRYPTION_KEY',   label: 'Payout data encryption key' },
+    { key: 'ADMIN_EMAIL',             label: 'Admin email' },
+    { key: 'ADMIN_PASSWORD',          label: 'Admin password' },
+  ];
+
+  const missing = REQUIRED_SECRETS.filter(({ key }) => !process.env[key]);
+  if (missing.length > 0) {
+    missing.forEach(({ key, label }) => {
+      console.error(`❌ FATAL: Missing required environment variable: ${key} (${label})`);
+    });
+    process.exit(1);
+  }
+} else {
+  // In non-production, still require JWT_SECRET so dev tokens are not insecure
+  if (!process.env.JWT_SECRET) {
+    console.error('❌ FATAL: JWT_SECRET environment variable is not set. Server cannot start.');
+    process.exit(1);
+  }
+}
+
 const lastErrors = [];
+
 const originalConsoleError = console.error;
 console.error = (...args) => {
   lastErrors.push({
@@ -26,8 +63,15 @@ app.set('trust proxy', true);
 // Security
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const clientUrl = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
+const allowedOrigins = [clientUrl];
 app.use(cors({
-  origin: true, // Allow all origins for the testing branch to ensure preview works
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 
@@ -51,6 +95,63 @@ const isVercel = !!process.env.VERCEL;
 const uploadStaticPath = isVercel ? '/tmp/uploads' : path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadStaticPath));
 
+// Auth Middleware Import for protecting endpoints
+const { authenticate, authorize } = require('./middleware/auth');
+
+// ── Rate Limiting ────────────────────────────────────────────────────────────
+// Auth endpoints: strict limits to block brute force & OTP abuse
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,   // 15 minutes
+  max: parseInt(process.env.AUTH_RATE_LIMIT || '20', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please wait 15 minutes before trying again.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+// OTP-specific: very tight limit to prevent OTP spray attacks
+const otpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,   // 10 minutes
+  max: parseInt(process.env.OTP_RATE_LIMIT || '5', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many OTP requests. Please wait 10 minutes before trying again.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+// Payment endpoints: per-IP limit to prevent payment abuse
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000,         // 1 minute
+  max: parseInt(process.env.PAYMENT_RATE_LIMIT || '10', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many payment requests. Please wait before trying again.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+// File upload limiter
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,         // 1 minute
+  max: parseInt(process.env.UPLOAD_RATE_LIMIT || '15', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many file upload requests. Please wait before trying again.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+// General API limiter (catch-all, generous limit)
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,         // 1 minute
+  max: parseInt(process.env.API_RATE_LIMIT || '300', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please slow down.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+// Apply general API rate limiter to all routes
+app.use('/api/', apiLimiter);
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
@@ -61,10 +162,18 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/withdrawals', require('./routes/withdrawal'));
 app.use('/api/export', require('./routes/export'));
 app.use('/api/push', require('./routes/push'));
+
+// Apply targeted rate limiters to high-risk auth routes
+// (applied after router mount so they run before route handlers)
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/verify-otp', otpLimiter);
+app.use('/api/auth/resend-otp', otpLimiter);
+
 const paymentsRouter = require('./payments/routes/payments').default;
 const { dispatcher } = require('./payments/routes/payments');
 
-app.use('/api/payments', paymentsRouter);
+app.use('/api/payments', paymentLimiter, paymentsRouter);
 app.use('/api/print-jobs', require('./payments/routes/print_jobs').default);
 
 // Register Fulfillment Module
@@ -87,8 +196,8 @@ NotificationModule.register(app);
 const { AnalyticsModule } = require('./analytics/analytics');
 AnalyticsModule.register(app);
 
-// Health check
-app.get('/api/debug-errors', (req, res) => {
+// Health check (Protected in production)
+app.get('/api/debug-errors', authenticate, authorize('admin'), (req, res) => {
   res.json({
     errors: lastErrors,
     dbMode: process.env.DB_HOST === 'mysql9.serv00.com' ? 'sqlite_forced' : 'mysql',
@@ -106,7 +215,8 @@ app.use((err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'File too large. Maximum 50MB.' });
   }
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  const errorMessage = process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message || 'Internal server error';
+  res.status(500).json({ error: errorMessage });
 });
 
 // Background Delivery Timeout Checker

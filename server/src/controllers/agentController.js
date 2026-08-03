@@ -227,31 +227,42 @@ exports.verifyDelivery = async (req, res) => {
       return res.status(400).json({ error: 'Order is not in out_for_delivery state or not assigned to you.' });
     }
 
-    // Consume the delivery verification code — prevents reuse and logs who verified it
-    await db.execute(
-      'UPDATE orders SET delivery_code = NULL, delivery_verified_by = ?, delivery_verified_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [req.user.id, orderId]
-    );
-
-    await db.execute("UPDATE deliveries SET status = 'delivered', dropoff_verified = 1, delivery_time = CURRENT_TIMESTAMP WHERE order_id = ? AND agent_id = ?",
-      [orderId, req.user.id]
-    );
-    await db.execute("UPDATE orders SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?", [orderId]);
-
-    // Credit agent wallet
-    const [deliveries] = await db.execute('SELECT earnings FROM deliveries WHERE order_id = ? AND agent_id = ?', [orderId, req.user.id]);
-    if (deliveries.length) {
-      const earning = parseFloat(deliveries[0].earnings);
-      await db.execute('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?', [earning, req.user.id]);
-      
-      const [[{ wallet_balance }]] = await db.execute('SELECT wallet_balance FROM users WHERE id = ?', [req.user.id]);
-      
-      await db.execute(
-        'INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)',
-        [req.user.id, 'credit', earning, `Delivery #${order.order_hash.substring(0, 8).toUpperCase()}`, order.order_hash, wallet_balance]
+    // Wrap in a transaction to prevent double-credit race conditions.
+    // The WHERE clause on status='out_for_delivery' acts as an optimistic lock.
+    let earning = 0;
+    await db.transaction(async (conn) => {
+      // Atomic status transition — if another request already changed the status, affectedRows = 0
+      const [updateResult] = await conn.execute(
+        "UPDATE orders SET status = 'delivered', delivery_code = NULL, delivery_verified_by = ?, delivery_verified_at = CURRENT_TIMESTAMP, delivered_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'out_for_delivery'",
+        [req.user.id, orderId]
       );
 
-      // NOTIFY AGENT
+      if (updateResult.affectedRows === 0) {
+        throw new Error('ALREADY_PROCESSED');
+      }
+
+      await conn.execute(
+        "UPDATE deliveries SET status = 'delivered', dropoff_verified = 1, delivery_time = CURRENT_TIMESTAMP WHERE order_id = ? AND agent_id = ?",
+        [orderId, req.user.id]
+      );
+
+      // Credit agent wallet inside transaction
+      const [deliveries] = await conn.execute('SELECT earnings FROM deliveries WHERE order_id = ? AND agent_id = ?', [orderId, req.user.id]);
+      if (deliveries.length) {
+        earning = parseFloat(deliveries[0].earnings);
+        await conn.execute('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?', [earning, req.user.id]);
+
+        const [[{ wallet_balance }]] = await conn.execute('SELECT wallet_balance FROM users WHERE id = ?', [req.user.id]);
+
+        await conn.execute(
+          'INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)',
+          [req.user.id, 'credit', earning, `Delivery #${order.order_hash.substring(0, 8).toUpperCase()}`, order.order_hash, wallet_balance]
+        );
+      }
+    });
+
+    // Notifications happen outside transaction (non-critical)
+    if (earning > 0) {
       await db.execute(
         'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
         [req.user.id, '💰 Earnings Credited!', `You earned ₹${earning.toFixed(0)} for delivery #${order.order_hash.substring(0, 8).toUpperCase()}.`, 'wallet']
@@ -266,6 +277,9 @@ exports.verifyDelivery = async (req, res) => {
 
     res.json({ message: 'Delivery verified! Earnings credited.' });
   } catch (err) {
+    if (err.message === 'ALREADY_PROCESSED') {
+      return res.status(409).json({ error: 'This delivery has already been verified.' });
+    }
     console.error('Verify delivery error:', err);
     res.status(500).json({ error: 'Verification failed' });
   }

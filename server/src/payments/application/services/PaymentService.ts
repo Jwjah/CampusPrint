@@ -332,10 +332,12 @@ export class PaymentService implements IPaymentService {
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
 
+    // Use CSPRNG — Math.random() is not safe for payment references
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const randomBytes = crypto.randomBytes(4);
     let randomSuffix = '';
     for (let i = 0; i < 4; i++) {
-      randomSuffix += chars.charAt(Math.floor(Math.random() * chars.length));
+      randomSuffix += chars.charAt(randomBytes[i] % chars.length);
     }
 
     return `CP-PAY-${yyyy}${mm}${dd}-${randomSuffix}`;
@@ -522,7 +524,10 @@ export class PaymentService implements IPaymentService {
     const hash = crypto.createHash('sha256').update(payloadStr).digest('hex');
 
     // 1. Webhook Signature Verification
-    const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'dummy_webhook_secret';
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!secret) {
+      throw new PaymentValidationError('Webhook verification failed: RAZORPAY_WEBHOOK_SECRET is not configured');
+    }
     const isSignatureValid = await this.paymentGateway.verifyWebhookSignature(rawPayload, signature, secret);
 
     if (!isSignatureValid) {

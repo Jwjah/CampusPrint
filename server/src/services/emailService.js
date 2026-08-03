@@ -63,8 +63,15 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
     </div>
   `;
 
-  // Always log the OTP to the console for development unblocking
-  console.log(`\n🔑 [OTP SECURITY DEBUG] Code for ${email}: ${otp}\n`);
+  // Mask email for safe logging — never log OTP value itself
+  const maskedEmail = process.env.NODE_ENV === 'production'
+    ? email.replace(/^(.{2}).*@/, '$1****@')
+    : email;
+
+  // Log OTP code ONLY in development — NEVER in production
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`\n🔑 [OTP DEBUG - DEV ONLY] Code for ${email}: ${otp}\n`);
+  }
 
   // 1. Try Resend SDK first if key is present
   if (resendClient) {
@@ -85,7 +92,7 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
         throw new Error(response.error.message || 'Resend SDK error');
       }
 
-      console.log(`📧 OTP email sent to ${email} via Resend (id: ${response.data?.id})`);
+      console.log(`📧 OTP email dispatched to ${maskedEmail} via Resend (id: ${response.data?.id})`);
       return;
     } catch (resendErr) {
       console.error('❌ Resend API error, trying SMTP/Brevo fallback...', resendErr.message);
@@ -112,11 +119,11 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
     const result = await response.json();
 
     if (!response.ok) {
-      console.error('❌ Brevo API error:', JSON.stringify(result));
+      console.error('❌ Brevo API error:', result.code || response.status);
       throw new Error(result.message || 'Email delivery failed');
     }
 
-    console.log(`📧 OTP email sent to ${email} via Brevo (messageId: ${result.messageId})`);
+    console.log(`📧 OTP email dispatched to ${maskedEmail} via Brevo (messageId: ${result.messageId})`);
     return;
   }
 
@@ -129,7 +136,7 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
         subject: subjects[purpose] || subjects.verification,
         html: html,
       });
-      console.log(`📧 OTP email sent to ${email} via SMTP (messageId: ${info.messageId})`);
+      console.log(`📧 OTP email dispatched to ${maskedEmail} via SMTP (messageId: ${info.messageId})`);
       return;
     } catch (smtpErr) {
       console.error('❌ SMTP transport error:', smtpErr.message);

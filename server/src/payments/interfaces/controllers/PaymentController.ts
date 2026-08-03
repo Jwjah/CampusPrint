@@ -49,8 +49,13 @@ export class PaymentController {
       const paymentResponse = await this.paymentService.initiatePayment(dto, cid);
 
       // Generate checkout payload for frontend Razorpay SDK integration
+      const keyId = process.env.RAZORPAY_KEY_ID;
+      if (!keyId && process.env.NODE_ENV !== 'test') {
+        throw new Error('RAZORPAY_KEY_ID is missing');
+      }
+
       const checkoutPayload = {
-        key: process.env.RAZORPAY_KEY_ID || 'dummy_key',
+        key: keyId || 'test_mode_missing_key',
         amount: paymentResponse.amount,
         currency: paymentResponse.currency,
         name: 'CampusPrint',
