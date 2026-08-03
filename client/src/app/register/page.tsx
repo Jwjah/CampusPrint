@@ -181,6 +181,13 @@ export default function RegisterPage() {
                     </motion.div>
                   )}
 
+                  <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 }}>
+                    <input type="checkbox" required id="reg-agreements" style={{ width: 16, height: 16, accentColor: 'var(--primary)', flexShrink: 0 }} />
+                    <label htmlFor="reg-agreements" style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5, margin: 0, fontWeight: 400 }}>
+                      I have read and agree to the <Link href="/terms" target="_blank" style={{ color: 'var(--primary-light)' }}>Terms of Service</Link>, <Link href="/privacy" target="_blank" style={{ color: 'var(--primary-light)' }}>Privacy Policy</Link>, and <Link href="/payout-policy" target="_blank" style={{ color: 'var(--primary-light)' }}>Payout Policy</Link>.
+                    </label>
+                  </div>
+
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                     <button type="button" className="btn btn-secondary" onClick={() => setStep(1)} style={{ flex: 1 }}>
                       ← Back

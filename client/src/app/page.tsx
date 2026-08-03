@@ -226,10 +226,19 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer style={{
-        padding: '40px 24px', borderTop: '1px solid var(--border)',
-        textAlign: 'center', color: 'var(--text-muted)', fontSize: 13,
+        padding: '60px 24px', borderTop: '1px solid var(--border)',
+        textAlign: 'center', color: 'var(--text-muted)', fontSize: 14,
+        background: 'rgba(5, 5, 16, 0.4)'
       }}>
-        <p>© 2024 CampusPrint. Built with ❤️ for campus communities.</p>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '24px 32px', flexWrap: 'wrap', marginBottom: 32, maxWidth: 800, margin: '0 auto 32px' }}>
+          <Link href="/privacy" style={{ color: 'var(--text-secondary)', textDecoration: 'none', transition: 'color 0.2s' }}>Privacy Policy</Link>
+          <Link href="/terms" style={{ color: 'var(--text-secondary)', textDecoration: 'none', transition: 'color 0.2s' }}>Terms of Service</Link>
+          <Link href="/refunds" style={{ color: 'var(--text-secondary)', textDecoration: 'none', transition: 'color 0.2s' }}>Refund Policy</Link>
+          <Link href="/payout-policy" style={{ color: 'var(--text-secondary)', textDecoration: 'none', transition: 'color 0.2s' }}>Payout Policy</Link>
+          <Link href="/copyright" style={{ color: 'var(--text-secondary)', textDecoration: 'none', transition: 'color 0.2s' }}>Copyright Policy</Link>
+          <Link href="/contact" style={{ color: 'var(--text-secondary)', textDecoration: 'none', transition: 'color 0.2s' }}>Contact Us</Link>
+        </div>
+        <p style={{ color: 'var(--text-tertiary)' }}>© 2024 CampusPrint. Built with ❤️ for campus communities.</p>
       </footer>
     </div>
   );

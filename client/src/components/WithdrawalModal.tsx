@@ -229,6 +229,10 @@ export default function WithdrawalModal({ isOpen, onClose, availableBalance, onS
               />
             </div>
 
+            <div style={{ padding: 12, borderRadius: 8, background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', color: '#93c5fd', fontSize: 12, lineHeight: 1.5, marginTop: 16 }}>
+              <strong>ℹ️ Note:</strong> Withdrawals are processed only after customer payments have successfully settled to CampusPrint. Settlement times depend on the payment processor and banking network.
+            </div>
+
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
               <button className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>Close</button>
               <TapButton 

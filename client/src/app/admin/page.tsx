@@ -135,6 +135,28 @@ export default function AdminDashboard() {
         </motion.div>
       </div>
 
+      {/* Financial Operations */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+        style={{ marginBottom: 32 }}
+      >
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Financial Operations (Read-Only)</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+          <div className="glass-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 600 }}>Pending Settlements</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-secondary)' }}>₹0.00</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Awaiting Razorpay bank settlement</div>
+          </div>
+          <div className="glass-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 600 }}>Payout Queue</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-secondary)' }}>0</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Withdrawal requests pending manual processing</div>
+          </div>
+        </div>
+      </motion.div>
+
       {/* Top Shops */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}

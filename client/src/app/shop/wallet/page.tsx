@@ -43,12 +43,33 @@ export default function ShopWalletPage() {
         <div className="skeleton" style={{ height: 200 }} />
       ) : (
         <>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card" style={{ padding: 48, textAlign: 'center', marginBottom: 32 }}>
-            <div style={{ color: 'var(--text-tertiary)', fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Available Balance</div>
-            <div style={{ fontSize: 64, fontWeight: 900, background: 'linear-gradient(135deg, var(--success), #16a34a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              ₹{parseFloat(shop?.wallet_balance || 0).toFixed(2)}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 32 }}>
+            <div className="glass-card" style={{ padding: 48, textAlign: 'center', gridColumn: '1 / -1' }}>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Available Balance</div>
+              <div style={{ fontSize: 64, fontWeight: 900, background: 'linear-gradient(135deg, var(--success), #16a34a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                ₹{parseFloat(shop?.wallet_balance || 0).toFixed(2)}
+              </div>
+              <button className="btn btn-primary" style={{ marginTop: 24 }} onClick={() => setModalOpen(true)}>Withdraw Earnings</button>
             </div>
-            <button className="btn btn-primary" style={{ marginTop: 24 }} onClick={() => setModalOpen(true)}>Withdraw Earnings</button>
+            
+            <div className="glass-card" style={{ padding: 24, textAlign: 'center' }}>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Pending Earnings</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-secondary)' }}>
+                ₹{parseFloat(shop?.pending_balance || 0).toFixed(2)}
+              </div>
+            </div>
+            <div className="glass-card" style={{ padding: 24, textAlign: 'center' }}>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Withdrawal Processing</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-secondary)' }}>
+                ₹{parseFloat(shop?.withdrawal_processing || 0).toFixed(2)}
+              </div>
+            </div>
+            <div className="glass-card" style={{ padding: 24, textAlign: 'center' }}>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Total Paid</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-secondary)' }}>
+                ₹{parseFloat(shop?.total_paid || 0).toFixed(2)}
+              </div>
+            </div>
           </motion.div>
 
           <WithdrawalModal 

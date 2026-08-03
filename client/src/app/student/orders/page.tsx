@@ -430,6 +430,10 @@ export default function OrdersPage() {
                 >
                   💳 {isPaying ? 'Processing...' : 'Pay Now'}
                 </TapButton>
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Payments are processed securely through Razorpay.
+                </p>
               </div>
             )}
 
