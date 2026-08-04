@@ -134,9 +134,9 @@ export default function WithdrawalModal({ isOpen, onClose, availableBalance, onS
 
   return (
     <ModalOverlay isOpen={isOpen} onClose={onClose}>
-      <div className="glass-card" style={{ padding: 32, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8, color: 'var(--text-primary)' }}>Withdraw Earnings</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 24 }}>
+      <div className="glass-card" style={{ padding: '20px 16px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8, color: 'var(--text-primary)' }}>Withdraw Earnings</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
           Available Balance: <strong style={{ color: 'var(--success)' }}>₹{availableBalance.toFixed(2)}</strong>
         </p>
 

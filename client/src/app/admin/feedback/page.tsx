@@ -612,9 +612,10 @@ export default function AdminFeedbackPage() {
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               style={{
-                width: '100%', maxWidth: 580, height: '100vh', background: '#0b0f19',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.1)', padding: 32,
-                overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 24
+                width: '100%', maxWidth: 580, height: '100dvh', background: '#0b0f19',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px 16px',
+                overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 24,
+                boxSizing: 'border-box'
               }}
               onClick={(e) => e.stopPropagation()}
             >

@@ -348,9 +348,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         animate={{ x: isMobile ? (sidebarOpen ? 0 : -260) : 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
         style={{
-          width: 260, flexShrink: 0, position: 'fixed', top: 0, bottom: 0, left: 0,
+          width: 260, flexShrink: 0, position: 'fixed', top: 0, bottom: 0, left: 0, height: '100dvh',
           background: 'var(--bg-primary)', borderRight: '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column', zIndex: 50,
+          display: 'flex', flexDirection: 'column', zIndex: 50, overflowY: 'auto',
+          paddingBottom: 'env(safe-area-inset-bottom, 12px)', WebkitOverflowScrolling: 'touch'
         }}
       >
         {/* Logo */}
@@ -497,7 +498,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </motion.aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, marginLeft: isMobile ? 0 : 260, minHeight: '100vh', transition: 'margin-left 0.3s ease' }}>
+      <main style={{ flex: 1, marginLeft: isMobile ? 0 : 260, minHeight: '100dvh', width: isMobile ? '100%' : 'calc(100% - 260px)', maxWidth: '100%', overflowX: 'hidden', transition: 'margin-left 0.3s ease' }}>
         {/* Top bar */}
         <motion.header
           initial={{ y: -10, opacity: 0 }}

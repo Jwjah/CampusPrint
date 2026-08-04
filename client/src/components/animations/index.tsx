@@ -126,18 +126,25 @@ export const ModalOverlay = ({ children, isOpen, onClose }: { children: ReactNod
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
         style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px',
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: 'calc(12px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px))',
         }}
         onClick={onClose}
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
           onClick={(e) => e.stopPropagation()}
-          style={{ maxWidth: '540px', width: '100%', maxHeight: '90vh', overflow: 'auto' }}
+          style={{
+            maxWidth: '540px', width: '100%',
+            maxHeight: 'calc(100dvh - 24px)',
+            display: 'flex', flexDirection: 'column',
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+            boxSizing: 'border-box'
+          }}
         >
           {children}
         </motion.div>
