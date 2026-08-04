@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import DashboardLayout from '@/components/layout/DashboardLayout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -233,8 +232,7 @@ export default function AdminFeedbackPage() {
     : null;
 
   return (
-    <DashboardLayout>
-      <div style={{ maxWidth: 1280, margin: '0 auto', paddingBottom: 64 }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', paddingBottom: 64 }}>
         
         {/* Top Header & Breadcrumb */}
         <div style={{ marginBottom: 24 }}>
@@ -595,8 +593,6 @@ export default function AdminFeedbackPage() {
           )}
         </div>
 
-      </div>
-
       {/* ── INSPECTION SLIDE-OVER DRAWER (Clerk / Notion style) ───────────── */}
       <AnimatePresence>
         {selectedFeedback && (
@@ -784,6 +780,6 @@ export default function AdminFeedbackPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </DashboardLayout>
+    </div>
   );
 }
