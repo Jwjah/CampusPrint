@@ -163,11 +163,6 @@ exports.getMyFeedback = async (req, res) => {
 
 // GET /api/admin/feedback — Fetch all feedback (Admin)
 exports.getAdminFeedback = async (req, res) => {
-  console.log('[BACKEND GET /api/admin/feedback] Request received');
-  console.log('[BACKEND GET /api/admin/feedback] Authenticated user ID:', req.user?.id);
-  console.log('[BACKEND GET /api/admin/feedback] Authenticated user role:', req.user?.role);
-  console.log('[BACKEND GET /api/admin/feedback] Controller entered: getAdminFeedback');
-
   try {
     const { status, category, role, search, startDate, endDate } = req.query;
 
@@ -214,14 +209,10 @@ exports.getAdminFeedback = async (req, res) => {
 
     query += ' ORDER BY f.created_at DESC LIMIT 200';
 
-    console.log('[BACKEND GET /api/admin/feedback] SQL executed:', query, 'Params:', params);
     const [rows] = await db.execute(query, params);
-    console.log('[BACKEND GET /api/admin/feedback] Rows returned count:', rows ? rows.length : 0);
-    console.log('[BACKEND GET /api/admin/feedback] Response sent HTTP 200 OK');
-
     return res.json({ feedback: rows });
   } catch (err) {
-    console.error('[BACKEND GET /api/admin/feedback ERROR] Complete stack trace:\n', err.stack || err);
+    console.error('Get admin feedback error:', err.stack || err);
     return res.status(500).json({ error: 'Failed to fetch feedback' });
   }
 };

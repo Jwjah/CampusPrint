@@ -64,11 +64,37 @@ app.set('trust proxy', true);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const clientUrl = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
 const allowedOrigins = [clientUrl];
+
+// Support www variant automatically
+if (clientUrl.startsWith('https://') && !clientUrl.includes('www.')) {
+  allowedOrigins.push(clientUrl.replace('https://', 'https://www.'));
+} else if (clientUrl.includes('www.')) {
+  allowedOrigins.push(clientUrl.replace('https://www.', 'https://'));
+}
+
+// Support additional allowed origins from env (comma-separated)
+if (process.env.ALLOWED_ORIGINS) {
+  process.env.ALLOWED_ORIGINS.split(',').forEach(o => {
+    const trimmed = o.trim().replace(/\/$/, '');
+    if (trimmed && !allowedOrigins.includes(trimmed)) allowedOrigins.push(trimmed);
+  });
+}
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+    if (!origin) {
+      // Server-to-server, health checks, mobile apps
+      callback(null, true);
+    } else if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else if (process.env.NODE_ENV !== 'production') {
+      // Allow all origins in development/test
+      callback(null, true);
+    } else if (origin.endsWith('.vercel.app')) {
+      // Allow Vercel preview deployments in production
       callback(null, true);
     } else {
+      console.warn(`[CORS BLOCKED] Origin: ${origin} | Allowed: ${allowedOrigins.join(', ')}`);
       callback(new Error('Not allowed by CORS'));
     }
   },

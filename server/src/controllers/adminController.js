@@ -164,7 +164,7 @@ exports.exportOrders = async (req, res) => {
 
     const headers = 'ID,Hash,Student,Shop,Status,Print Type,Copies,Pages,Price,Delivery,Created\n';
     const csv = orders.map(o =>
-      `${o.id},${o.order_hash},${o.student},${o.shop_name},${o.status},${o.print_type},${o.copies},${o.total_pages},${o.total_price},${o.delivery_type},${o.created_at}`
+      `${o.id},${o.order_hash},${o.student},${o.shop},${o.status},${o.print_type},${o.copies},${o.total_pages},${o.total_price},${o.delivery_type},${o.created_at}`
     ).join('\n');
 
     res.setHeader('Content-Type', 'text/csv');

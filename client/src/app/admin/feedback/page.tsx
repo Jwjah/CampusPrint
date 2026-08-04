@@ -66,7 +66,6 @@ export default function AdminFeedbackPage() {
 
   const fetchFeedback = async () => {
     try {
-      console.log("Loading admin feedback...");
       setLoading(true);
       const params: any = {};
       if (search.trim()) params.search = search.trim();
@@ -75,15 +74,9 @@ export default function AdminFeedbackPage() {
       if (roleFilter !== 'All Roles') params.role = roleFilter;
 
       const res = await api.get('/admin/feedback', { params });
-      console.log('[ADMIN FEEDBACK RESPONSE STATUS]:', res.status);
-      console.log('[ADMIN FEEDBACK RESPONSE DATA]:', res.data);
-
       setFeedbackList(res.data.feedback || []);
     } catch (err: any) {
-      console.error('[ADMIN FEEDBACK ERROR]:', err);
-      console.error('[ADMIN FEEDBACK ERROR STATUS]:', err.response?.status);
-      console.error('[ADMIN FEEDBACK ERROR DATA]:', err.response?.data);
-
+      console.error('Failed to fetch admin feedback:', err);
       if (err.response?.status === 401) {
         toast.error('Session expired. Please log in again.');
       } else if (err.response?.status === 403) {
