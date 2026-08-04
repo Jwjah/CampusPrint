@@ -19,7 +19,7 @@ export default function AgentMissionsPage() {
 
   useEffect(() => { 
     loadMissions();
-    const interval = setInterval(() => loadMissions(true), 3000);
+    const interval = setInterval(() => loadMissions(true), 8000);
     return () => clearInterval(interval);
   }, []);
 

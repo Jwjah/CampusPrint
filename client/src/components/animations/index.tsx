@@ -6,12 +6,12 @@ import { ReactNode } from 'react';
 // Page transition wrapper
 export const PageTransition = ({ children, className = '', style }: { children: ReactNode; className?: string; style?: React.CSSProperties }) => (
   <motion.div
-    initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
-    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-    exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
-    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -12 }}
+    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
     className={className}
-    style={style}
+    style={{ willChange: 'transform, opacity', ...style }}
   >
     {children}
   </motion.div>
@@ -63,11 +63,11 @@ export const StaggerContainer = ({ children, className = '', style, staggerDelay
 export const StaggerItem = ({ children, className = '', style }: { children: ReactNode; className?: string; style?: React.CSSProperties }) => (
   <motion.div
     variants={{
-      hidden: { opacity: 0, y: 20, scale: 0.95 },
-      visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+      hidden: { opacity: 0, y: 12 },
+      visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } },
     }}
     className={className}
-    style={style}
+    style={{ willChange: 'transform, opacity', ...style }}
   >
     {children}
   </motion.div>

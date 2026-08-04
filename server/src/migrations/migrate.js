@@ -1523,6 +1523,45 @@ const migrate = async () => {
     console.warn('  ⚠️ System settings seed warning:', err.message);
   }
 
+  // ── Performance Indexes ─────────────────────────────────────────────────────
+  // Composite indexes for high-frequency query patterns to eliminate full table scans.
+  console.log('\n📊 Creating performance indexes...');
+  const performanceIndexes = [
+    // Orders: Queried by student dashboard, shop dashboard, agent dashboard, delivery timeout checker
+    'CREATE INDEX IF NOT EXISTS idx_orders_student_status ON orders(student_id, status)',
+    'CREATE INDEX IF NOT EXISTS idx_orders_shop_status ON orders(shop_id, status)',
+    'CREATE INDEX IF NOT EXISTS idx_orders_agent_status ON orders(agent_id, status)',
+    'CREATE INDEX IF NOT EXISTS idx_orders_delivery_lookup ON orders(delivery_type, status, agent_id)',
+    'CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_orders_hash ON orders(order_hash)',
+    // Order files: Queried by order detail views and print trigger
+    'CREATE INDEX IF NOT EXISTS idx_order_files_order_id ON order_files(order_id)',
+    // Notifications: Queried by notification bell and unread counts
+    'CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read)',
+    'CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at)',
+    // Push subscriptions: Queried when sending push notifications
+    'CREATE INDEX IF NOT EXISTS idx_push_subs_user_id ON push_subscriptions(user_id)',
+    // Outbox events: Queried by outbox processor for pending events
+    'CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status)',
+    // Transactions: Queried by wallet and earnings views
+    'CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)',
+    // Deliveries: Queried by agent dashboard
+    'CREATE INDEX IF NOT EXISTS idx_deliveries_agent_status ON deliveries(agent_id, status)',
+    'CREATE INDEX IF NOT EXISTS idx_deliveries_order_id ON deliveries(order_id)',
+  ];
+
+  for (const indexSql of performanceIndexes) {
+    try {
+      await db.execute(indexSql);
+    } catch (err) {
+      // Indexes may already exist or table may not exist yet — skip gracefully
+      if (!err.message.includes('already exists') && !err.message.includes('Duplicate') && !err.message.includes('no such table')) {
+        console.warn(`  ⚠️ Index warning: ${err.message}`);
+      }
+    }
+  }
+  console.log('  ✅ Performance indexes applied');
+
   console.log('\n✅ All migrations complete!\n');
   if (require.main === module) {
     process.exit(0);

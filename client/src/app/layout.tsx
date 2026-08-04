@@ -2,7 +2,18 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
-import InstallPrompt from "@/components/InstallPrompt";
+import dynamic from "next/dynamic";
+import { Inter } from "next/font/google";
+
+// Lazy-load non-critical UI: InstallPrompt defers loading of install prompt logic
+const InstallPrompt = dynamic(() => import("@/components/InstallPrompt"));
+
+// Self-hosted font via next/font — eliminates render-blocking Google Fonts CSS
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -39,12 +50,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png" />
+        {/* DNS prefetch for external services to reduce connection latency */}
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+        <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
       </head>
-      <body>
+      <body className={inter.className}>
         <ServiceWorkerRegistrar />
         <InstallPrompt />
         <Toaster
@@ -57,7 +71,7 @@ export default function RootLayout({
               border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: '12px',
               fontSize: '14px',
-              fontFamily: 'Inter, sans-serif',
+              fontFamily: 'var(--font-inter), Inter, sans-serif',
               boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
             },
             success: {
@@ -73,3 +87,4 @@ export default function RootLayout({
     </html>
   );
 }
+

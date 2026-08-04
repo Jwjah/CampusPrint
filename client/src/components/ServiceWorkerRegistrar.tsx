@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
+import toast from 'react-hot-toast';
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BKUjTPjIWNqNcREhwnSq4ooOcgpeq0ohxkt10bOT80Hffy-jbNhiVlvGolfKoCHEZOocvTtQoMOvLU47hz7vE90';
 
@@ -62,13 +63,16 @@ export default function ServiceWorkerRegistrar() {
         const registration = await navigator.serviceWorker.register('/sw.js');
         console.log('✅ Service Worker registered:', registration.scope);
 
+        // Check for updates on register
+        registration.update();
+
         // Listen for SW updates
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
-                console.log('🔄 New Service Worker activated — app updated.');
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('🔄 New version installed. Activating...');
               }
             });
           }
@@ -82,6 +86,62 @@ export default function ServiceWorkerRegistrar() {
         console.warn('⚠️ Service Worker registration failed:', err);
       }
     };
+
+    // Smart SW update handler: reload automatically if idle/auth page, otherwise prompt user safely
+    let refreshing = false;
+    const handleControllerChange = () => {
+      if (refreshing) return;
+
+      const currentPath = window.location.pathname;
+      const isUnauthenticatedRoute = currentPath.includes('/login') || currentPath.includes('/register') || currentPath.includes('/maintenance');
+      const isHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+      if (isUnauthenticatedRoute || isHidden) {
+        refreshing = true;
+        console.log('⚡ Service worker updated — auto-reloading idle/auth page.');
+        window.location.reload();
+      } else {
+        console.log('⚡ Service worker updated — prompting user for refresh.');
+        toast((t) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Update Available! 🚀</div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>A new version of CampusPrint is ready.</div>
+            </div>
+            <button
+              onClick={() => {
+                refreshing = true;
+                toast.dismiss(t.id);
+                window.location.reload();
+              }}
+              style={{
+                background: 'var(--primary, #6366f1)',
+                color: 'white',
+                border: 'none',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              Update Now
+            </button>
+          </div>
+        ), {
+          duration: 20000,
+          id: 'sw-update-toast',
+        });
+      }
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'SW_ACTIVATED') {
+        console.log('🎉 New Service Worker activated:', event.data.version);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleSWMessage);
 
     registerSW();
 
@@ -114,6 +174,10 @@ export default function ServiceWorkerRegistrar() {
 
     return () => {
       window.removeEventListener('subscribe-push', handleSubscribePush);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      }
       if (channel) {
         channel.close();
       }

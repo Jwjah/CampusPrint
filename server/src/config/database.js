@@ -181,19 +181,35 @@ if (USE_SQLITE) {
     }
   });
 
+  const logSlowQuery = (query, startMs) => {
+    const duration = Date.now() - startMs;
+    if (duration > 100) {
+      const cleanQuery = (typeof query === 'string' ? query : String(query)).replace(/\s+/g, ' ').substring(0, 120);
+      console.warn(`⚡ [SLOW DB QUERY >100ms] ${duration}ms: ${cleanQuery}`);
+    }
+  };
+
   db = Object.assign(Object.create(pool), {
     execute: async (query, params) => {
+      const startMs = Date.now();
       try {
-        return await pool.execute(query, params);
+        const res = await pool.execute(query, params);
+        logSlowQuery(query, startMs);
+        return res;
       } catch (err) {
         if (err.message.includes('Incorrect arguments to mysqld_stmt_execute') || (typeof query === 'string' && query.toUpperCase().includes('LIMIT'))) {
-          return await pool.query(query, params);
+          const res = await pool.query(query, params);
+          logSlowQuery(query, startMs);
+          return res;
         }
         throw err;
       }
     },
     query: async (query, params) => {
-      return await pool.query(query, params);
+      const startMs = Date.now();
+      const res = await pool.query(query, params);
+      logSlowQuery(query, startMs);
+      return res;
     },
     getConnection: async () => {
       const conn = await pool.getConnection();

@@ -12,6 +12,7 @@ router.get('/download-agent', authenticate, authorize('shop', 'admin'), shops.do
 router.get('/:id/stats', authenticate, authorize('shop', 'admin', 'student'), shops.getShopStats);
 router.put('/:id', authenticate, authorize('shop', 'admin', 'student'), shops.updateShop);
 router.post('/:id/trigger-print', authenticate, authorize('shop'), shops.triggerPrint);
+router.get('/:id/stream-print', authenticate, authorize('shop'), shops.streamPrintJobs);
 router.get('/:id/poll-print', authenticate, authorize('shop'), shops.pollPrintJobs);
 
 module.exports = router;

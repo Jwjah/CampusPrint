@@ -22,7 +22,7 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     loadOrders();
-    const interval = setInterval(() => loadOrders(true), 3000);
+    const interval = setInterval(() => loadOrders(true), 10000);
     return () => clearInterval(interval);
   }, []);
 

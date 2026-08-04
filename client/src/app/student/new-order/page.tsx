@@ -117,7 +117,7 @@ export default function NewOrderPage() {
 
   useEffect(() => {
     loadShops();
-    const interval = setInterval(loadShops, 3000);
+    const interval = setInterval(loadShops, 15000);
     return () => clearInterval(interval);
   }, []);
 

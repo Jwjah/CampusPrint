@@ -1,9 +1,10 @@
 const db = require('../config/database');
 const { sendPushToUser } = require('../services/pushService');
 
-// Simple in-memory queue for print jobs. 
-// Keys are shop_ids, values are arrays of print jobs.
+// Simple in-memory queue & SSE client registry for print jobs. 
+// Keys are shop_ids, values are arrays of print jobs or active SSE client streams.
 const printQueue = {};
+const sseClients = {};
 
 // POST /api/shops — Register a new shop
 exports.createShop = async (req, res) => {
@@ -263,7 +264,11 @@ exports.triggerPrint = async (req, res) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
     const baseUrl = `${protocol}://${host}/api`;
 
-    // Add each file to the queue with dynamic print settings
+    const apiReceivedAt = Date.now();
+    const studentClickAt = req.body.clientTimestamp || apiReceivedAt - 15;
+
+    // Add each file to the queue with dynamic print settings & tracing metadata
+    const newJobs = [];
     for (const file of files) {
       let orientation = 'portrait';
       if (order.notes) {
@@ -271,17 +276,38 @@ exports.triggerPrint = async (req, res) => {
         if (match) orientation = match[1].toLowerCase();
       }
 
-      printQueue[shopId].push({
+      const sseDispatchedAt = Date.now();
+      const job = {
         orderId,
         fileId: file.id,
         fileName: file.original_name,
-        // Token is NOT embedded in the URL — the print agent uses its own stored auth token from config.json
         fileUrl: `${baseUrl}/orders/files/${file.id}/print-pdf`,
         copies: order.copies || 1,
         printType: order.print_type || 'bw',
         layout: order.layout || 'single',
         orientation,
+        printTrace: {
+          studentClickAt,
+          apiReceivedAt,
+          sseDispatchedAt,
+        },
+      };
+
+      printQueue[shopId].push(job);
+      newJobs.push(job);
+    }
+
+    // Real-time instant delivery via SSE stream if Print Agent is connected
+    if (sseClients[shopId] && sseClients[shopId].length > 0 && newJobs.length > 0) {
+      const payload = `data: ${JSON.stringify({ type: 'NEW_JOBS', jobs: newJobs })}\n\n`;
+      sseClients[shopId].forEach((client) => {
+        try {
+          client.write(payload);
+        } catch (streamErr) {
+          console.warn('⚠️ SSE client write failed:', streamErr.message);
+        }
       });
+      printQueue[shopId] = []; // Instant delivery confirmed
     }
 
     // Also update order status to ready directly so the student can scan and pickup immediately
@@ -294,13 +320,62 @@ exports.triggerPrint = async (req, res) => {
   }
 };
 
-// GET /api/shops/:id/poll-print — Local agent polls this
+// GET /api/shops/:id/stream-print — Real-time SSE stream connection for Print Agent
+exports.streamPrintJobs = async (req, res) => {
+  try {
+    const shopId = req.params.id;
+    const [shops] = await db.execute('SELECT * FROM shops WHERE id = ? AND user_id = ?', [shopId, req.user.id]);
+    if (!shops.length) {
+      return res.status(403).json({ error: 'Unauthorized agent' });
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    res.write(`data: ${JSON.stringify({ type: 'CONNECTED', shopId })}\n\n`);
+
+    if (!sseClients[shopId]) {
+      sseClients[shopId] = [];
+    }
+    sseClients[shopId].push(res);
+
+    // Flushes any pending jobs immediately upon SSE connection
+    if (printQueue[shopId] && printQueue[shopId].length > 0) {
+      const pendingJobs = [...printQueue[shopId]];
+      printQueue[shopId] = [];
+      res.write(`data: ${JSON.stringify({ type: 'NEW_JOBS', jobs: pendingJobs })}\n\n`);
+    }
+
+    // Heartbeat ping every 20s to prevent reverse proxy (Render/Nginx) idle connection drops
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`: ping\n\n`);
+      } catch (e) {
+        clearInterval(heartbeat);
+      }
+    }, 20000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      if (sseClients[shopId]) {
+        sseClients[shopId] = sseClients[shopId].filter((client) => client !== res);
+      }
+    });
+  } catch (err) {
+    console.error('SSE print stream error:', err);
+    res.status(500).json({ error: 'Failed to establish print stream' });
+  }
+};
+
+// GET /api/shops/:id/poll-print — Local agent polls this as fallback
 exports.pollPrintJobs = async (req, res) => {
   try {
     const shopId = req.params.id;
     
-    // In a real app, you'd use a dedicated agent token. For simplicity, 
-    // we use the shop owner's JWT token to authenticate the agent.
     const [shops] = await db.execute('SELECT * FROM shops WHERE id = ? AND user_id = ?', [shopId, req.user.id]);
     if (!shops.length) {
       return res.status(403).json({ error: 'Unauthorized agent' });

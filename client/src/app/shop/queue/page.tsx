@@ -36,7 +36,7 @@ export default function QueuePage() {
     api.get('/orders').then(({ data }) => setOrders(data.orders || [])).catch(() => {}).finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadOrders(); const i = setInterval(() => loadOrders(true), 3000); return () => clearInterval(i); }, []);
+  useEffect(() => { loadOrders(); const i = setInterval(() => loadOrders(true), 5000); return () => clearInterval(i); }, []);
 
   const updateStatus = async (orderId: number, status: string) => {
     try {

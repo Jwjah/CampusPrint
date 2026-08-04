@@ -21,7 +21,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadStats();
-    const interval = setInterval(() => loadStats(true), 3000);
+    const interval = setInterval(() => loadStats(true), 15000);
     return () => clearInterval(interval);
   }, []);
 

@@ -121,8 +121,72 @@ const corsOptionsDelegate = (req, callback) => {
 
 app.use(cors(corsOptionsDelegate));
 
+// Gzip response compression middleware
+const zlib = require('zlib');
+app.use((req, res, next) => {
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+  if (!acceptEncoding.includes('gzip') || req.method === 'HEAD') {
+    return next();
+  }
 
+  // Skip compressing already compressed media files or binary buffers
+  const urlPath = req.path || '';
+  if (urlPath.match(/\.(pdf|png|jpg|jpeg|gif|webp|zip)$/i)) {
+    return next();
+  }
 
+  const rawWrite = res.write;
+  const rawEnd = res.end;
+  const gzip = zlib.createGzip({ level: 6 });
+
+  res.setHeader('Content-Encoding', 'gzip');
+  res.removeHeader('Content-Length');
+
+  gzip.on('data', (chunk) => rawWrite.call(res, chunk));
+  gzip.on('end', () => rawEnd.call(res));
+
+  res.write = function (data, encoding) {
+    gzip.write(data, encoding);
+  };
+  res.end = function (data, encoding) {
+    gzip.end(data, encoding);
+  };
+
+  next();
+});
+
+// End-to-end performance tracing & Request ID correlation middleware
+const crypto = require('crypto');
+app.use((req, res, next) => {
+  const requestId = req.headers['x-request-id'] || crypto.randomUUID();
+  req.requestId = requestId;
+  res.setHeader('X-Request-ID', requestId);
+
+  const startMs = Date.now();
+  req.perfTrace = {
+    requestId,
+    startTime: startMs,
+    dbTimeMs: 0,
+    dbQueryCount: 0,
+  };
+
+  res.on('finish', () => {
+    const totalMs = Date.now() - startMs;
+    const dbTime = req.perfTrace.dbTimeMs;
+    const queryCount = req.perfTrace.dbQueryCount;
+    const appTime = Math.max(0, totalMs - dbTime);
+
+    // Alert on slow API endpoints (> 250ms threshold)
+    if (totalMs > 250 && !req.path.includes('/stream-print')) {
+      console.warn(
+        `⚡ [SLOW API >250ms] [ReqID: ${requestId.substring(0, 8)}] ${req.method} ${req.originalUrl} ` +
+        `-> Total: ${totalMs}ms | DB: ${dbTime}ms (${queryCount} queries) | Controller/Logic: ${appTime}ms (Status ${res.statusCode})`
+      );
+    }
+  });
+
+  next();
+});
 
 // Body parsing
 app.use(express.json({
@@ -365,7 +429,7 @@ const startServer = () => {
     console.log(`  NODE_ENV: "${process.env.NODE_ENV}"`);
     console.log('---------------------------------------\n');
     
-    // Start timeout checker
+    // Start background timeout checker
     startDeliveryTimeoutChecker();
   });
 };

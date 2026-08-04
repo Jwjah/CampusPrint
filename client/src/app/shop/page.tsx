@@ -31,7 +31,7 @@ export default function ShopDashboard() {
 
   useEffect(() => { 
     loadData();
-    const interval = setInterval(() => loadData(true), 3000);
+    const interval = setInterval(() => loadData(true), 10000);
     return () => clearInterval(interval);
   }, []);
 

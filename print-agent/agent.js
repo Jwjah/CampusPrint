@@ -242,6 +242,110 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single', or
   });
 }
 
+const POLL_INTERVAL_MS = 15000;
+
+async function handleIncomingJobs(jobs) {
+  if (!jobs || jobs.length === 0) return;
+  const agentReceivedAt = Date.now();
+  console.log(`\n⚡ [REAL-TIME STREAM] Received ${jobs.length} new print job(s)!`);
+
+  for (const job of jobs) {
+    console.log(`⏳ Downloading Order #${job.orderId} - ${job.fileName}...`);
+    const filePath = path.join(TEMP_DIR, `${job.orderId}_${job.fileName}`);
+
+    const downloadStart = Date.now();
+    try {
+      await downloadFile(job.fileUrl, filePath);
+      const downloadCompletedAt = Date.now();
+      console.log(`💾 Saved to local disk: ${filePath}`);
+
+      const printerStart = Date.now();
+      printFile(filePath, job.copies, job.printType, job.layout, job.orientation);
+      const printerStartedAt = Date.now();
+
+      // Print Pipeline Latency Tracing Audit Log
+      if (job.printTrace) {
+        const { studentClickAt, apiReceivedAt, sseDispatchedAt } = job.printTrace;
+        const totalMs = printerStartedAt - studentClickAt;
+        const logTrace = [
+          `\n⏱️ [PRINT PIPELINE TRACE - Order #${job.orderId}]`,
+          `  1. Student Click -> API Recv : ${Math.max(0, apiReceivedAt - studentClickAt)}ms`,
+          `  2. API -> SSE Dispatch      : ${Math.max(0, sseDispatchedAt - apiReceivedAt)}ms`,
+          `  3. SSE -> Agent Recv        : ${Math.max(0, agentReceivedAt - sseDispatchedAt)}ms`,
+          `  4. PDF Download Time        : ${Math.max(0, downloadCompletedAt - downloadStart)}ms`,
+          `  5. OS Printer Trigger       : ${Math.max(0, printerStartedAt - printerStart)}ms`,
+          `  ---------------------------------------------------`,
+          `  ⚡ TOTAL PIPELINE LATENCY    : ${Math.max(0, totalMs)}ms (${(Math.max(0, totalMs) / 1000).toFixed(2)}s)\n`
+        ].join('\n');
+        console.log(logTrace);
+        try {
+          fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ${logTrace}\n`);
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.error(`❌ Failed to process print job #${job.orderId}:`, err.message);
+    }
+  }
+}
+
+function startSseStream() {
+  const streamUrl = `${API_BASE_URL}/shops/${SHOP_ID}/stream-print`;
+  console.log(`⚡ Connecting real-time print stream: ${streamUrl}`);
+
+  try {
+    const isHttps = streamUrl.startsWith('https');
+    const httpLib = isHttps ? require('https') : require('http');
+
+    const req = httpLib.get(streamUrl, {
+      headers: {
+        'Authorization': `Bearer ${AUTH_TOKEN}`,
+        'Accept': 'text/event-stream'
+      }
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        console.warn(`⚠️ Real-time stream status ${res.statusCode}. Fallback polling active.`);
+        return;
+      }
+
+      console.log('✅ Real-time SSE print stream connected! Instant (<1.5s) printing active.');
+
+      let buffer = '';
+      res.on('data', (chunk) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data:')) {
+            try {
+              const jsonStr = trimmed.replace(/^data:\s*/, '');
+              const payload = JSON.parse(jsonStr);
+              if (payload.type === 'NEW_JOBS' && payload.jobs) {
+                handleIncomingJobs(payload.jobs);
+              }
+            } catch (e) {
+              // Parse error ignored
+            }
+          }
+        }
+      });
+
+      res.on('end', () => {
+        console.warn('⚠️ Real-time stream closed. Reconnecting stream in 5s...');
+        setTimeout(startSseStream, 5000);
+      });
+    });
+
+    req.on('error', (err) => {
+      console.warn('⚠️ SSE stream connection error:', err.message);
+      setTimeout(startSseStream, 10000);
+    });
+  } catch (err) {
+    console.warn('⚠️ SSE stream init exception:', err.message);
+  }
+}
+
 // Polling loop
 async function pollForJobs() {
   try {
@@ -250,19 +354,9 @@ async function pollForJobs() {
     });
 
     const jobs = response.data.jobs || [];
-
     if (jobs.length > 0) {
-      console.log(`\n📥 Received ${jobs.length} new print jobs!`);
-    }
-
-    for (const job of jobs) {
-      console.log(`⏳ Downloading Order #${job.orderId} - ${job.fileName}...`);
-      const filePath = path.join(TEMP_DIR, `${job.orderId}_${job.fileName}`);
-
-      await downloadFile(job.fileUrl, filePath);
-      console.log(`💾 Saved to local disk: ${filePath}`);
-
-      printFile(filePath, job.copies, job.printType, job.layout, job.orientation);
+      console.log(`\n📥 [FALLBACK POLL] Received ${jobs.length} print jobs!`);
+      await handleIncomingJobs(jobs);
     }
   } catch (error) {
     if (error.response && error.response.status === 403) {
@@ -315,6 +409,7 @@ async function startPolling() {
     await ensureSumatraPDF();
   }
   
+  startSseStream();
   pollForJobs();
 }
 
