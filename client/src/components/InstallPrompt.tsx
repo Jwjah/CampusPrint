@@ -24,8 +24,9 @@ export default function InstallPrompt() {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
     if (isStandalone) return;
 
-    // 2. If not installed, default to showing the banner
-    setShowBanner(true);
+    // 2. Check if dismissed in session
+    const dismissed = sessionStorage.getItem('dismissed-install-banner') === 'true';
+    if (dismissed) return;
 
     // 3. Detect Platform
     const ua = navigator.userAgent.toLowerCase();
@@ -56,6 +57,7 @@ export default function InstallPrompt() {
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setShowBanner(true);
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
 

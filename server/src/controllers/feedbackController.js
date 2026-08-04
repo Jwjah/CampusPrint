@@ -167,9 +167,11 @@ exports.getAdminFeedback = async (req, res) => {
     const { status, category, role, search, startDate, endDate } = req.query;
 
     let query = `
-      SELECT f.*, u.name as user_name, u.email as user_email 
+      SELECT f.*, 
+             COALESCE(u.name, 'Unknown User') as user_name, 
+             COALESCE(u.email, 'N/A') as user_email 
       FROM feedback f 
-      JOIN users u ON f.user_id = u.id 
+      LEFT JOIN users u ON f.user_id = u.id 
       WHERE 1=1
     `;
     const params = [];
@@ -220,9 +222,11 @@ exports.getFeedbackById = async (req, res) => {
   try {
     const { id } = req.params;
     const [rows] = await db.execute(
-      `SELECT f.*, u.name as user_name, u.email as user_email 
+      `SELECT f.*, 
+              COALESCE(u.name, 'Unknown User') as user_name, 
+              COALESCE(u.email, 'N/A') as user_email 
        FROM feedback f 
-       JOIN users u ON f.user_id = u.id 
+       LEFT JOIN users u ON f.user_id = u.id 
        WHERE f.id = ? OR f.feedback_id = ?`,
       [id, id]
     );

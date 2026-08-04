@@ -118,19 +118,24 @@ export default function HelpAndSupportPage() {
         formData.append('attachment', file);
       }
 
-      const res = await api.post('/feedback', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post('/feedback', formData);
 
       if (res.data?.success) {
         setSubmittedFeedbackId(res.data.feedback_id);
         setForm({ category: 'General Feedback', subject: '', message: '', rating: 0 });
         setFile(null);
+        toast.success('Feedback submitted successfully!');
         fetchMyFeedback();
       }
     } catch (err: any) {
       console.error('Submit feedback error:', err);
-      toast.error(err.response?.data?.error || 'Failed to submit feedback');
+      if (err.response?.status === 401) {
+        toast.error('Session expired. Please log in again.');
+      } else if (err.response?.status === 403) {
+        toast.error('Permission denied.');
+      } else {
+        toast.error(err.response?.data?.error || 'Unable to submit feedback. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
