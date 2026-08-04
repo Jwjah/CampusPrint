@@ -275,7 +275,7 @@ exports.getMe = async (req, res) => {
     let shop = null;
     if (users[0].role === 'shop') {
       const [shops] = await db.execute(
-        'SELECT id, name, is_active FROM shops WHERE owner_id = ?',
+        'SELECT id, shop_name AS name, is_open AS is_active, is_approved FROM shops WHERE user_id = ?',
         [req.user.id]
       );
       if (shops.length) shop = shops[0];
@@ -314,8 +314,11 @@ exports.getTransactions = async (req, res) => {
     if (endDate) { query += ' AND created_at <= ?'; params.push(endDate); }
 
     query += ' ORDER BY created_at DESC LIMIT 100';
-    console.error('Get me error:', err);
-    res.status(500).json({ error: 'Failed to fetch user' });
+    const [transactions] = await db.execute(query, params);
+    return res.json({ transactions });
+  } catch (err) {
+    console.error('Get transactions error:', err);
+    res.status(500).json({ error: 'Failed to fetch transactions' });
   }
 };
 
