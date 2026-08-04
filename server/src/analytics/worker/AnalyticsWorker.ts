@@ -10,7 +10,7 @@ import db from '../../config/database';
  */
 export class AnalyticsWorker {
   private isRunning = false;
-  private timer: any = null;
+  private isProcessing = false;
   public processedEventCount = 0;
   private readonly retryLimits = new Map<string, number>();
 
@@ -25,40 +25,64 @@ export class AnalyticsWorker {
     if (this.isRunning) return;
     this.isRunning = true;
     console.log('🚀 [AnalyticsWorker] Background worker started');
-    this.tick();
+    this.pollLoop();
   }
 
   public async stop(): Promise<void> {
     this.isRunning = false;
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
+    while (this.isProcessing) {
+      await new Promise(r => setTimeout(r, 50));
     }
     console.log('🛑 [AnalyticsWorker] Background worker stopped');
   }
 
-  private tick(): void {
-    if (!this.isRunning) return;
+  private async pollLoop(): Promise<void> {
+    let emptyPolls = 0;
+    let delay = this.pollIntervalMs;
 
-    this.processBatch()
-      .then(() => {
-        if (this.isRunning) {
-          this.timer = setTimeout(() => this.tick(), this.pollIntervalMs);
+    while (this.isRunning) {
+      if (this.isProcessing) {
+        break;
+      }
+      this.isProcessing = true;
+
+      let workFound = false;
+      try {
+        const processedCount = await this.processBatch();
+        if (processedCount > 0) {
+          workFound = true;
         }
-      })
-      .catch(err => {
+      } catch (err: any) {
         console.error('🚨 [AnalyticsWorker] Tick error:', err.message);
-        if (this.isRunning) {
-          this.timer = setTimeout(() => this.tick(), this.pollIntervalMs * 2);
+      } finally {
+        this.isProcessing = false;
+      }
+
+      if (workFound) {
+        emptyPolls = 0;
+        delay = this.pollIntervalMs;
+      } else {
+        emptyPolls++;
+        if (emptyPolls >= 15) {
+          delay = 5000;
+        } else if (emptyPolls >= 5) {
+          delay = 3000;
+        } else {
+          delay = 1000;
         }
-      });
+      }
+
+      if (!this.isRunning) break;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 
-  private async processBatch(): Promise<void> {
+  private async processBatch(): Promise<number> {
     const start = Date.now();
     const events = await this.source.poll(this.batchSize);
-    if (events.length === 0) return;
+    if (events.length === 0) return 0;
 
+    let successCount = 0;
     for (const event of events) {
       const conn = await db.getConnection();
       try {
@@ -67,6 +91,7 @@ export class AnalyticsWorker {
         await this.source.acknowledge(event, conn);
         await conn.commit();
         this.processedEventCount++;
+        successCount++;
         AnalyticsMetricsService.lastProcessedEventId = event.eventId;
         AnalyticsMetricsService.processingDurationMs = Date.now() - start;
       } catch (err: any) {
@@ -77,6 +102,7 @@ export class AnalyticsWorker {
         conn.release();
       }
     }
+    return successCount;
   }
 
   private async handleFailure(event: DomainEvent, error: any): Promise<void> {

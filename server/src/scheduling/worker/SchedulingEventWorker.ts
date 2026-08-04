@@ -13,7 +13,6 @@ export class SchedulingEventWorker {
   public readonly workerId: string;
   private isRunning: boolean = false;
   private isProcessing: boolean = false;
-  private timer: NodeJS.Timeout | null = null;
   private eventCount: number = 0;
 
   constructor(
@@ -40,7 +39,7 @@ export class SchedulingEventWorker {
     if (this.isRunning) return;
     this.isRunning = true;
     console.log(`🚀 [SchedulingEventWorker] Started background worker ID: ${this.workerId}`);
-    this.tick();
+    this.pollLoop();
   }
 
   /**
@@ -49,10 +48,6 @@ export class SchedulingEventWorker {
   public async stop(): Promise<void> {
     if (!this.isRunning) return;
     this.isRunning = false;
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
     console.log(`🛑 [SchedulingEventWorker] Initiating graceful shutdown for worker ID: ${this.workerId}...`);
     
     // Wait for current loop cycle to complete
@@ -62,28 +57,53 @@ export class SchedulingEventWorker {
     console.log(`✅ [SchedulingEventWorker] Worker ID: ${this.workerId} cleanly shut down.`);
   }
 
-  private tick(): void {
-    if (!this.isRunning) return;
+  private async pollLoop(): Promise<void> {
+    let emptyPolls = 0;
+    let delay = this.pollIntervalMs;
 
-    this.timer = setTimeout(async () => {
+    while (this.isRunning) {
+      if (this.isProcessing) {
+        break;
+      }
       this.isProcessing = true;
+
+      let workFound = false;
       try {
         const events = await this.source.poll(this.batchSize);
         if (events.length > 0) {
           for (const event of events) {
-            await this.processWithRetry(event);
+            const success = await this.processWithRetry(event);
+            if (success) {
+              workFound = true;
+            }
           }
         }
       } catch (err: any) {
         console.error(`[SchedulingEventWorker] Error in worker tick:`, err.message);
       } finally {
         this.isProcessing = false;
-        this.tick();
       }
-    }, this.pollIntervalMs);
+
+      if (workFound) {
+        emptyPolls = 0;
+        delay = this.pollIntervalMs;
+      } else {
+        emptyPolls++;
+        if (emptyPolls >= 15) {
+          delay = 5000;
+        } else if (emptyPolls >= 5) {
+          delay = 3000;
+        } else {
+          delay = 1000;
+        }
+      }
+
+      if (!this.isRunning) break;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 
-  private async processWithRetry(event: DomainEvent): Promise<void> {
+  private async processWithRetry(event: DomainEvent): Promise<boolean> {
     const maxRetries = 2;
     let retries = 0;
 
@@ -103,7 +123,7 @@ export class SchedulingEventWorker {
           this.eventCount++;
           console.log(`[WorkerLoop] Processed event "${event.eventType}" (id=${event.eventId}, orderId=${event.payload?.orderId})`);
         }
-        return; // Success, exit retry loop
+        return true; // Success, exit retry loop
       } catch (err: any) {
         await conn.rollback();
 
@@ -111,14 +131,24 @@ export class SchedulingEventWorker {
         const isDuplicate = err.message.includes('UNIQUE constraint failed') || err.message.includes('Duplicate entry');
         if (isDuplicate) {
           console.warn(`[WorkerLoop] Duplicate event processing skipped for event ID: ${event.eventId}`);
-          return;
+          const ackConn = await db.getConnection();
+          try {
+            await ackConn.beginTransaction();
+            await this.source.acknowledge(event, ackConn);
+            await ackConn.commit();
+          } catch (ackErr) {
+            await ackConn.rollback();
+          } finally {
+            ackConn.release();
+          }
+          return true;
         }
 
         retries++;
         if (retries > maxRetries) {
           // Send to DLQ
           await this.sendToDLQ(event, err.message);
-          return;
+          return false;
         }
 
         // Wait before retry (transient error backoff)
@@ -128,6 +158,7 @@ export class SchedulingEventWorker {
         conn.release();
       }
     }
+    return false;
   }
 
   private async sendToDLQ(event: DomainEvent, errorMessage: string): Promise<void> {

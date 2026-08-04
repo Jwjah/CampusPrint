@@ -121,39 +121,6 @@ const corsOptionsDelegate = (req, callback) => {
 
 app.use(cors(corsOptionsDelegate));
 
-// Gzip response compression middleware
-const zlib = require('zlib');
-app.use((req, res, next) => {
-  const acceptEncoding = req.headers['accept-encoding'] || '';
-  if (!acceptEncoding.includes('gzip') || req.method === 'HEAD') {
-    return next();
-  }
-
-  // Skip compressing already compressed media files or binary buffers
-  const urlPath = req.path || '';
-  if (urlPath.match(/\.(pdf|png|jpg|jpeg|gif|webp|zip)$/i)) {
-    return next();
-  }
-
-  const rawWrite = res.write;
-  const rawEnd = res.end;
-  const gzip = zlib.createGzip({ level: 6 });
-
-  res.setHeader('Content-Encoding', 'gzip');
-  res.removeHeader('Content-Length');
-
-  gzip.on('data', (chunk) => rawWrite.call(res, chunk));
-  gzip.on('end', () => rawEnd.call(res));
-
-  res.write = function (data, encoding) {
-    gzip.write(data, encoding);
-  };
-  res.end = function (data, encoding) {
-    gzip.end(data, encoding);
-  };
-
-  next();
-});
 
 // End-to-end performance tracing & Request ID correlation middleware
 const crypto = require('crypto');
