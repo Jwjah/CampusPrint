@@ -80,26 +80,46 @@ if (process.env.ALLOWED_ORIGINS) {
   });
 }
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) {
-      // Server-to-server, health checks, mobile apps
-      callback(null, true);
-    } else if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else if (process.env.NODE_ENV !== 'production') {
-      // Allow all origins in development/test
-      callback(null, true);
-    } else if (origin.endsWith('.vercel.app')) {
-      // Allow Vercel preview deployments in production
-      callback(null, true);
-    } else {
-      console.warn(`[CORS BLOCKED] Origin: ${origin} | Allowed: ${allowedOrigins.join(', ')}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-}));
+const corsOptionsDelegate = (req, callback) => {
+  const origin = req.header('Origin');
+  let isAllowed = false;
+
+  if (!origin) {
+    // Server-to-server, health checks, mobile apps, curl, Postman
+    isAllowed = true;
+  } else if (allowedOrigins.includes(origin)) {
+    isAllowed = true;
+  } else if (process.env.NODE_ENV !== 'production') {
+    // Allow all origins in development/test
+    isAllowed = true;
+  } else if (origin.endsWith('.vercel.app')) {
+    // Allow Vercel preview deployments in production
+    isAllowed = true;
+  }
+
+  if (isAllowed) {
+    callback(null, { origin: true, credentials: true });
+  } else {
+    // Phase 1 / 8: Log diagnostics for blocked requests
+    console.log("========== CORS REQUEST ==========");
+    console.log("Origin:", origin || 'N/A');
+    console.log("Host:", req.header('Host') || 'N/A');
+    console.log("Referer:", req.header('Referer') || 'N/A');
+    console.log("Method:", req.method);
+    console.log("Path:", req.path);
+    console.log("Allowed Origins:", allowedOrigins.join(', '));
+    console.log("NODE_ENV:", process.env.NODE_ENV || 'N/A');
+    console.log("CLIENT_URL:", process.env.CLIENT_URL || 'N/A');
+    console.log("ALLOWED_ORIGINS:", process.env.ALLOWED_ORIGINS || 'N/A');
+    console.log("User-Agent:", req.header('User-Agent') || 'N/A');
+    console.log("==================================");
+
+    // Reject cleanly without throwing an exception or polluting logs
+    callback(null, { origin: false, credentials: true });
+  }
+};
+
+app.use(cors(corsOptionsDelegate));
 
 
 
@@ -322,20 +342,42 @@ const startDeliveryTimeoutChecker = () => {
 const PORT = originalPort || process.env.PORT || 5000;
 const migrate = require('./migrations/migrate');
 
-migrate()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`\n🚀 CampusPrint API running on port ${PORT}`);
-      console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`   Client URL:  ${process.env.CLIENT_URL}\n`);
-      
-      // Start timeout checker
-      startDeliveryTimeoutChecker();
-    });
-  })
-  .catch(err => {
-    console.error('❌ Failed to run database migrations during startup:', err);
-    app.listen(PORT, () => {
-      console.log(`\n🚀 CampusPrint API running on port ${PORT} (migrations failed)`);
-    });
+const startServer = () => {
+  app.listen(PORT, () => {
+    console.log(`\n🚀 CampusPrint API running on port ${PORT}`);
+    console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`   Client URL:  ${process.env.CLIENT_URL}`);
+    
+    console.log('\n--- CORS ENVIRONMENT VARIABLE AUDIT ---');
+    const cu = process.env.CLIENT_URL || '';
+    console.log(`  CLIENT_URL: "${cu}"`);
+    console.log(`    - Has trailing slash: ${cu.endsWith('/')}`);
+    console.log(`    - Protocol: ${cu.startsWith('https://') ? 'https' : cu.startsWith('http://') ? 'http' : 'none'}`);
+    console.log(`    - Has www: ${cu.includes('www.')}`);
+    console.log(`    - Has leading/trailing whitespace: ${cu.length !== cu.trim().length}`);
+    
+    const ao = process.env.ALLOWED_ORIGINS || '';
+    console.log(`  ALLOWED_ORIGINS: "${ao}"`);
+    console.log(`    - Has trailing slashes: ${ao.includes('/,') || ao.endsWith('/')}`);
+    console.log(`    - Has spaces: ${ao.includes(' ')}`);
+    console.log(`    - Has duplicate commas: ${ao.includes(',,')}`);
+    console.log(`    - Split origins list: [${ao.split(',').map(s => `"${s.trim()}"`).join(', ')}]`);
+    
+    console.log(`  NODE_ENV: "${process.env.NODE_ENV}"`);
+    console.log('---------------------------------------\n');
+    
+    // Start timeout checker
+    startDeliveryTimeoutChecker();
   });
+};
+
+if (process.env.SKIP_MIGRATE === 'true') {
+  startServer();
+} else {
+  migrate()
+    .then(startServer)
+    .catch(err => {
+      console.error('❌ Failed to run database migrations during startup:', err);
+      startServer();
+    });
+}
