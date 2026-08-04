@@ -3,6 +3,7 @@ export interface PrintSettings {
   duplex: 'none' | 'short-edge' | 'long-edge';
   colorMode: 'color' | 'bw';
   copies: number;
+  pagesPerSheet?: number;
   compression?: 'None' | 'Low' | 'Medium' | 'High';
 }
 

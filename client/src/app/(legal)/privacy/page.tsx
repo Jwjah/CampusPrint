@@ -29,7 +29,7 @@ export default function PrivacyPolicyPage() {
 
       <h2 style={{ fontSize: 24, fontWeight: 700, color: '#fff', marginTop: 32, marginBottom: 16 }}>5. Contact Us</h2>
       <p>
-        If you have any questions about this Privacy Policy, please contact us at support@campusprint.com.
+        If you have any questions about this Privacy Policy, please contact us at <strong>support.campusprint@gmail.com</strong>.
       </p>
     </div>
   );

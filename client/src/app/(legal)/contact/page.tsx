@@ -15,7 +15,7 @@ export default function ContactPage() {
           <div style={{ color: 'var(--primary)', fontSize: 32, marginBottom: 16 }}><HiOutlineMail /></div>
           <h3 style={{ fontSize: 20, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Email Support</h3>
           <p style={{ marginBottom: 16 }}>Reach out to us via email for general inquiries, order issues, or technical support.</p>
-          <a href="mailto:support@campusprint.com" style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>support@campusprint.com</a>
+          <a href="mailto:support.campusprint@gmail.com" style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>support.campusprint@gmail.com</a>
         </div>
 
         <div className="glass-card" style={{ padding: 24 }}>
@@ -38,7 +38,7 @@ export default function ContactPage() {
           <div style={{ color: 'var(--primary)', fontSize: 24, marginTop: 4 }}><HiOutlineChatAlt2 /></div>
           <div>
             <h4 style={{ color: '#fff', fontWeight: 600, fontSize: 16, marginBottom: 4 }}>Order Problems & Refunds</h4>
-            <p style={{ fontSize: 14 }}>Missing prints, failed deliveries, or refund requests. <br/>Email: <strong>support@campusprint.com</strong></p>
+            <p style={{ fontSize: 14 }}>Missing prints, failed deliveries, or refund requests. <br/>Email: <strong>support.campusprint@gmail.com</strong></p>
           </div>
         </div>
 
@@ -46,7 +46,7 @@ export default function ContactPage() {
           <div style={{ color: 'var(--primary)', fontSize: 24, marginTop: 4 }}><HiOutlineChatAlt2 /></div>
           <div>
             <h4 style={{ color: '#fff', fontWeight: 600, fontSize: 16, marginBottom: 4 }}>Payment Issues & Shop Payouts</h4>
-            <p style={{ fontSize: 14 }}>Failed transactions, settlement delays, or payout inquiries for shop owners. <br/>Email: <strong>payments@campusprint.com</strong></p>
+            <p style={{ fontSize: 14 }}>Failed transactions, settlement delays, or payout inquiries for shop owners. <br/>Email: <strong>support.campusprint@gmail.com</strong></p>
           </div>
         </div>
 
@@ -54,7 +54,7 @@ export default function ContactPage() {
           <div style={{ color: 'var(--primary)', fontSize: 24, marginTop: 4 }}><HiOutlineChatAlt2 /></div>
           <div>
             <h4 style={{ color: '#fff', fontWeight: 600, fontSize: 16, marginBottom: 4 }}>Copyright Complaints</h4>
-            <p style={{ fontSize: 14 }}>Report intellectual property infringement or unauthorized material. <br/>Email: <strong>copyright@campusprint.com</strong></p>
+            <p style={{ fontSize: 14 }}>Report intellectual property infringement or unauthorized material. <br/>Email: <strong>support.campusprint@gmail.com</strong></p>
           </div>
         </div>
       </div>

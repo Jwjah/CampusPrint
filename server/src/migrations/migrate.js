@@ -20,6 +20,7 @@ const migrate = async () => {
       hostel TEXT DEFAULT NULL,
       room_number TEXT DEFAULT NULL,
       is_verified INTEGER DEFAULT 0,
+      phone_verified INTEGER DEFAULT 0,
       is_suspended INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -31,6 +32,7 @@ const migrate = async () => {
       purpose TEXT NOT NULL DEFAULT 'register',
       expires_at TEXT NOT NULL,
       is_used INTEGER DEFAULT 0,
+      attempts INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS shops (
@@ -276,6 +278,30 @@ const migrate = async () => {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE INDEX IF NOT EXISTS idx_outbox_events_status ON outbox_events(status)`,
+    `CREATE TABLE IF NOT EXISTS system_settings (
+      setting_key TEXT PRIMARY KEY,
+      setting_value TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      feedback_id TEXT UNIQUE NOT NULL,
+      user_id INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      category TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      message TEXT NOT NULL,
+      rating INTEGER DEFAULT NULL,
+      attachment_url TEXT DEFAULT NULL,
+      order_id INTEGER DEFAULT NULL,
+      status TEXT NOT NULL DEFAULT 'New',
+      admin_notes TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status)`,
     `CREATE TABLE IF NOT EXISTS fulfillments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER NOT NULL UNIQUE,
@@ -1426,7 +1452,10 @@ const migrate = async () => {
     `ALTER TABLE orders ADD COLUMN delivery_verified_by INT DEFAULT NULL`,
     `ALTER TABLE orders ADD COLUMN delivery_verified_at TIMESTAMP NULL`,
     `ALTER TABLE orders MODIFY COLUMN pickup_code VARCHAR(20) DEFAULT NULL`,
-    `ALTER TABLE orders MODIFY COLUMN delivery_code VARCHAR(20) DEFAULT NULL`
+    `ALTER TABLE orders MODIFY COLUMN delivery_code VARCHAR(20) DEFAULT NULL`,
+    `ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0`,
+    `ALTER TABLE otp_codes ADD COLUMN attempts INTEGER DEFAULT 0`,
+    `ALTER TABLE orders ADD COLUMN pages_per_sheet INTEGER DEFAULT 1`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { console.warn('Alter table warning:', e.message); } // Ignore if column already exists or command unsupported

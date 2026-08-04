@@ -48,6 +48,7 @@ export default function NewOrderPage() {
   const [step, setStep] = useState(1);
   const [editingFileIndex, setEditingFileIndex] = useState<number | null>(null);
   const [agreedToDisclaimer, setAgreedToDisclaimer] = useState(false);
+  const [showComingSoonModal, setShowComingSoonModal] = useState(false);
 
   useEffect(() => {
     if (reorderId) {
@@ -331,17 +332,10 @@ export default function NewOrderPage() {
                           <motion.button 
                             whileHover={{ scale: 1.1 }} 
                             whileTap={{ scale: 0.9 }} 
-                            onClick={async () => {
-                              try {
-                                const { createDocumentFromFile } = await import('@/utils/documentHelper');
-                                const docId = await createDocumentFromFile(file as File);
-                                router.push(`/print-studio?docId=${docId}`);
-                              } catch (err) {
-                                console.error('Failed to transfer to print studio:', err);
-                                toast.error('Failed to open Print Studio');
-                              }
-                            }} 
-                            className="btn btn-ghost btn-icon" style={{ color: 'var(--primary)', padding: 4 }}>
+                            onClick={() => setShowComingSoonModal(true)} 
+                            className="btn btn-ghost btn-icon" style={{ color: 'var(--primary)', padding: 4 }}
+                            title="Edit Document"
+                          >
                             <HiOutlinePencilAlt size={18} />
                           </motion.button>
                         )}
@@ -490,6 +484,38 @@ export default function NewOrderPage() {
               />
             )}
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showComingSoonModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 10000, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+              padding: 24,
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="glass-card"
+              style={{ width: '100%', maxWidth: 440, padding: 32, textAlign: 'center' }}
+            >
+              <div style={{ fontSize: 44, marginBottom: 16 }}>🛠️</div>
+              <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 12 }}>Coming Soon</h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
+                Our PDF editing tools are currently being improved to provide a better editing experience. This feature will be available in a future update.
+              </p>
+              <button className="btn btn-primary btn-lg" style={{ width: '100%' }} onClick={() => setShowComingSoonModal(false)}>
+                OK
+              </button>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>

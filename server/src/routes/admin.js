@@ -27,4 +27,15 @@ router.post('/withdrawals/:id/complete', authenticate, authorize('admin'), withd
 router.get('/notifications', authenticate, admin.getNotifications);
 router.patch('/notifications/read', authenticate, admin.markRead);
 
+const feedback = require('../controllers/feedbackController');
+
+// Maintenance Mode management endpoints
+router.get('/maintenance-mode', authenticate, authorize('admin'), admin.getMaintenanceMode);
+router.post('/maintenance-mode', authenticate, authorize('admin'), admin.toggleMaintenanceMode);
+
+// Feedback Management endpoints (Admin)
+router.get('/feedback', authenticate, authorize('admin'), feedback.getAdminFeedback);
+router.get('/feedback/:id', authenticate, authorize('admin'), feedback.getFeedbackById);
+router.patch('/feedback/:id', authenticate, authorize('admin'), feedback.updateFeedbackStatus);
+
 module.exports = router;

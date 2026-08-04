@@ -4,7 +4,7 @@ const db = require('../config/database');
 // Configure web-push with VAPID details
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
-    'mailto:' + (process.env.SMTP_USER || 'admin@campusprint.com'),
+    'mailto:' + (process.env.SMTP_USER || 'support.campusprint@gmail.com'),
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
   );

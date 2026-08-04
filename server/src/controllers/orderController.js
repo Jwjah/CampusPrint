@@ -109,6 +109,7 @@ exports.createOrder = async (req, res) => {
       layout: layout || 'single',
       binding: binding === 'true' || binding === true,
       binding_type: bindingType,
+      pages_per_sheet: req.body.pages_per_sheet || req.body.pagesPerSheet,
       notes: notes || '',
       shop,
     });
@@ -125,8 +126,8 @@ exports.createOrder = async (req, res) => {
 
     // Create order
     const [result] = await db.execute(
-      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used, pickup_code, delivery_code) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used, pickup_code, delivery_code, pages_per_sheet) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         orderHash, req.user.id, shop_id,
         print_type || 'bw', layout || 'single', parseInt(copies) || 1,
@@ -137,7 +138,8 @@ exports.createOrder = async (req, res) => {
         bindingType, pricing.bindingCost,
         pricing.price_bw_used, pricing.price_color_used,
         pricing.price_binding_used, pricing.price_stick_file_used,
-        pickupCode, deliveryCode
+        pickupCode, deliveryCode,
+        pricing.pages_per_sheet || 1
       ]
     );
 

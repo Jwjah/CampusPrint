@@ -149,8 +149,12 @@ const apiLimiter = rateLimit({
   skip: () => process.env.NODE_ENV === 'test',
 });
 
-// Apply general API rate limiter to all routes
+// Maintenance Mode Middleware
+const maintenanceMiddleware = require('./middleware/maintenance');
+
+// Apply general API rate limiter & maintenance middleware to all routes
 app.use('/api/', apiLimiter);
+app.use('/api/', maintenanceMiddleware);
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -162,6 +166,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/withdrawals', require('./routes/withdrawal'));
 app.use('/api/export', require('./routes/export'));
 app.use('/api/push', require('./routes/push'));
+app.use('/api/feedback', require('./routes/feedback'));
 
 // Apply targeted rate limiters to high-risk auth routes
 // (applied after router mount so they run before route handlers)

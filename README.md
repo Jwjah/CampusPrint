@@ -98,6 +98,9 @@ Can be deployed to **Serv00** (where your database is located) or **Render**.
 
 ---
 
+## 📬 Contact & Support
+For support, inquiries, or security feedback, contact the official CampusPrint team at [support.campusprint@gmail.com](mailto:support.campusprint@gmail.com).
+
 ## 📄 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 

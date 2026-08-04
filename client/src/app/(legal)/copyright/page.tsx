@@ -24,7 +24,7 @@ export default function CopyrightPolicyPage() {
         <li>A statement that you have a good faith belief that the use is not authorized.</li>
       </ul>
       <p>
-        Please send all copyright infringement notices to: <strong>copyright@campusprint.com</strong>.
+        Please send all copyright infringement notices to: <strong>support.campusprint@gmail.com</strong>.
       </p>
     </div>
   );

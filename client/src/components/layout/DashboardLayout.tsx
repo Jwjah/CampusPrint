@@ -14,7 +14,7 @@ import {
   HiOutlineBell, HiOutlineMenu, HiOutlineX, HiOutlineChartBar,
   HiOutlineUserGroup, HiOutlineShoppingBag, HiOutlineTruck,
   HiOutlineCurrencyDollar, HiOutlineLocationMarker, HiOutlineQrcode,
-  HiOutlineClock, HiOutlineCash,
+  HiOutlineClock, HiOutlineCash, HiOutlineQuestionMarkCircle, HiOutlineChatAlt2,
 } from 'react-icons/hi';
 
 interface NavItem {
@@ -30,6 +30,7 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: '/student/orders', icon: <HiOutlineShoppingBag size={20} />, label: 'My Orders' },
     { href: '/student/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
     { href: '/student/settings', icon: <HiOutlineCog size={20} />, label: 'Settings' },
+    { href: '/help', icon: <HiOutlineQuestionMarkCircle size={20} />, label: 'Help & Support' },
   ],
   shop: [
     { href: '/shop', icon: <HiOutlineHome size={20} />, label: 'Dashboard' },
@@ -38,6 +39,7 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: '/shop/wallet', icon: <HiOutlineCurrencyDollar size={20} />, label: 'Wallet' },
     { href: '/shop/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
     { href: '/shop/settings', icon: <HiOutlineCog size={20} />, label: 'Settings' },
+    { href: '/help', icon: <HiOutlineQuestionMarkCircle size={20} />, label: 'Help & Support' },
   ],
   agent: [
     { href: '/agent', icon: <HiOutlineHome size={20} />, label: 'Dashboard' },
@@ -48,6 +50,7 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: '/agent/earnings', icon: <HiOutlineCurrencyDollar size={20} />, label: 'Earnings' },
     { href: '/agent/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
     { href: '/agent/settings', icon: <HiOutlineCog size={20} />, label: 'Settings' },
+    { href: '/help', icon: <HiOutlineQuestionMarkCircle size={20} />, label: 'Help & Support' },
   ],
   admin: [
     { href: '/admin', icon: <HiOutlineChartBar size={20} />, label: 'Analytics' },
@@ -55,8 +58,10 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: '/admin/shops', icon: <HiOutlineShoppingBag size={20} />, label: 'Shops' },
     { href: '/admin/orders', icon: <HiOutlineDocumentText size={20} />, label: 'Orders' },
     { href: '/admin/withdrawals', icon: <HiOutlineCash size={20} />, label: 'Withdrawals' },
+    { href: '/admin/feedback', icon: <HiOutlineChatAlt2 size={20} />, label: 'Feedback' },
     { href: '/admin/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
     { href: '/admin/danger', icon: <HiOutlineCog size={20} />, label: 'Danger Zone' },
+    { href: '/help', icon: <HiOutlineQuestionMarkCircle size={20} />, label: 'Help & Support' },
   ],
 };
 
@@ -122,8 +127,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingForm, setOnboardingForm] = useState({ phone: '', hostel: '', room_number: '', acceptTerms: false });
   const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [otpStep, setOtpStep] = useState<'details' | 'otp'>('details');
+  const [otpCode, setOtpCode] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    let timer: any;
+    if (cooldown > 0) {
+      timer = setInterval(() => setCooldown(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
   useEffect(() => {
     setShowOnboarding(false);
+    setOtpStep('details');
+    setOtpCode('');
   }, [pathname]);
 
   useEffect(() => {
@@ -169,6 +188,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         room_number: user.room_number || '',
         acceptTerms: false
       });
+      setOtpStep('details');
+      setOtpCode('');
     }
   }, [showOnboarding, user?.id]);
 
@@ -188,24 +209,92 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [user?.id, pathname, loadUser]);
 
-  const handleRegisterAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendOTP = async () => {
+    const phone = onboardingForm.phone.trim();
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      toast.error('Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.');
+      return;
+    }
     if (!onboardingForm.acceptTerms) {
       toast.error('You must accept the Terms and Conditions.');
       return;
     }
     setOnboardingLoading(true);
     try {
+      const { data } = await api.post('/auth/send-agent-otp', { phone });
+      toast.success(data.message || 'OTP sent successfully!');
+      setOtpStep('otp');
+      setCooldown(60);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to send OTP');
+    } finally {
+      setOnboardingLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode || otpCode.trim().length !== 6) {
+      toast.error('Please enter the 6-digit OTP code');
+      return;
+    }
+    setOnboardingLoading(true);
+    try {
+      await api.post('/auth/verify-agent-otp', {
+        phone: onboardingForm.phone.trim(),
+        code: otpCode.trim(),
+        hostel: onboardingForm.hostel.trim(),
+        room_number: onboardingForm.room_number.trim()
+      });
+      toast.success('Successfully verified & registered as a Delivery Partner! 🎉');
+      api.post('/auth/audit', { event: 'DELIVERY_PARTNER_REGISTERED' }).catch(() => {});
+      await loadUser();
+      setShowOnboarding(false);
+      setOtpStep('details');
+      setOtpCode('');
+      if (user) {
+        localStorage.setItem(`campusprint_dashboard_mode_${user.id}`, 'delivery');
+      }
+      router.push('/agent');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'OTP Verification failed');
+    } finally {
+      setOnboardingLoading(false);
+    }
+  };
+
+  const handleRegisterAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const phone = onboardingForm.phone.trim();
+    if (phone && !/^[6-9]\d{9}$/.test(phone)) {
+      toast.error('Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.');
+      return;
+    }
+    if (!onboardingForm.acceptTerms) {
+      toast.error('You must accept the Terms and Conditions.');
+      return;
+    }
+
+    // Check if phone verification is needed
+    if (!user?.phone_verified || (user?.phone && user.phone !== phone)) {
+      return handleSendOTP();
+    }
+
+    setOnboardingLoading(true);
+    try {
       await api.post('/auth/register-agent', onboardingForm);
       toast.success('Successfully registered as a Delivery Partner!');
       api.post('/auth/audit', { event: 'DELIVERY_PARTNER_REGISTERED' }).catch(()=>{});
-      await loadUser(); // Reload user to get updated is_delivery_partner flag
+      await loadUser();
       setShowOnboarding(false);
       if (user) {
         localStorage.setItem(`campusprint_dashboard_mode_${user.id}`, 'delivery');
       }
-      router.push('/agent'); // Switch to delivery mode immediately
+      router.push('/agent');
     } catch (err: any) {
+      if (err.response?.data?.requiresOTP) {
+        return handleSendOTP();
+      }
       toast.error(err.response?.data?.error || 'Registration failed');
     } finally {
       setOnboardingLoading(false);
@@ -596,16 +685,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     Deliver prints on campus and earn money. Please review the terms and complete any missing details below.
                   </p>
 
-                  <form onSubmit={handleRegisterAgent} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {!user.phone && (
+                  {otpStep === 'details' ? (
+                    <form onSubmit={handleRegisterAgent} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div className="input-group">
-                        <label>Phone Number <span style={{color:'var(--error)'}}>*</span></label>
-                        <input className="input" type="tel" required placeholder="e.g. +91 9876543210"
-                          value={onboardingForm.phone} onChange={(e) => setOnboardingForm({...onboardingForm, phone: e.target.value})} />
+                        <label>Phone Number (10-Digit Mobile) <span style={{color:'var(--error)'}}>*</span></label>
+                        <input className="input" type="tel" required placeholder="e.g. 9876543210" maxLength={10}
+                          value={onboardingForm.phone} onChange={(e) => setOnboardingForm({...onboardingForm, phone: e.target.value.replace(/\D/g, '')})} />
+                        {onboardingForm.phone && !/^[6-9]\d{9}$/.test(onboardingForm.phone.trim()) && (
+                          <span style={{ fontSize: 12, color: 'var(--error)', marginTop: 4, display: 'block' }}>
+                            Must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9
+                          </span>
+                        )}
                       </div>
-                    )}
-                    
-                    {(!user.hostel || !user.room_number) && (
+                      
                       <div style={{ display: 'flex', gap: 12 }}>
                         <div className="input-group" style={{ flex: 1 }}>
                           <label>Hostel</label>
@@ -618,29 +710,63 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             value={onboardingForm.room_number} onChange={(e) => setOnboardingForm({...onboardingForm, room_number: e.target.value})} />
                         </div>
                       </div>
-                    )}
 
-                    <div style={{ background: 'var(--bg-tertiary)', padding: 16, borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, maxHeight: 150, overflowY: 'auto', marginBottom: 8 }}>
-                      <strong>Terms and Conditions</strong><br/>
-                      1. You agree to deliver prints securely and promptly to the designated locations.<br/>
-                      2. You are responsible for verifying QR codes at pickup and dropoff.<br/>
-                      3. Earnings will be credited to your wallet upon successful delivery verification.<br/>
-                      4. Misuse of the platform or failure to deliver may result in suspension of your delivery partner privileges.
-                    </div>
+                      <div style={{ background: 'var(--bg-tertiary)', padding: 16, borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, maxHeight: 150, overflowY: 'auto', marginBottom: 8 }}>
+                        <strong>Terms and Conditions</strong><br/>
+                        1. You agree to deliver prints securely and promptly to the designated locations.<br/>
+                        2. You are responsible for verifying QR codes at pickup and dropoff.<br/>
+                        3. Earnings will be credited to your wallet upon successful delivery verification.<br/>
+                        4. Misuse of the platform or failure to deliver may result in suspension of your delivery partner privileges.
+                      </div>
 
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13 }}>
-                      <input type="checkbox" style={{ marginTop: 2 }} required
-                        checked={onboardingForm.acceptTerms} onChange={(e) => setOnboardingForm({...onboardingForm, acceptTerms: e.target.checked})} />
-                      <span>I agree to the Terms and Conditions and understand my responsibilities as a delivery partner.</span>
-                    </label>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+                        <input type="checkbox" style={{ marginTop: 2 }} required
+                          checked={onboardingForm.acceptTerms} onChange={(e) => setOnboardingForm({...onboardingForm, acceptTerms: e.target.checked})} />
+                        <span>I agree to the Terms and Conditions and understand my responsibilities as a delivery partner.</span>
+                      </label>
 
-                    <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-                      <button type="button" className="btn btn-ghost" onClick={() => setShowOnboarding(false)} style={{ flex: 1 }}>Cancel</button>
-                      <button type="submit" className="btn btn-primary" disabled={onboardingLoading || !onboardingForm.acceptTerms} style={{ flex: 2 }}>
-                        {onboardingLoading ? 'Registering...' : 'Register as Partner'}
-                      </button>
-                    </div>
-                  </form>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                        <button type="button" className="btn btn-ghost" onClick={() => setShowOnboarding(false)} disabled={onboardingLoading} style={{ flex: 1 }}>Cancel</button>
+                        <button type="submit" className="btn btn-primary" disabled={onboardingLoading || !onboardingForm.acceptTerms || !/^[6-9]\d{9}$/.test(onboardingForm.phone.trim())} style={{ flex: 2 }}>
+                          {onboardingLoading ? 'Processing...' : user?.phone_verified && user?.phone === onboardingForm.phone ? 'Register as Partner' : 'Send OTP →'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleVerifyOTP} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: 12, borderRadius: 8, fontSize: 13, color: 'var(--primary-light)', textAlign: 'center' }}>
+                        OTP has been sent for verification to <strong>{onboardingForm.phone}</strong>.
+                      </div>
+
+                      <div className="input-group">
+                        <label>Enter 6-Digit OTP Code <span style={{color:'var(--error)'}}>*</span></label>
+                        <input className="input" type="text" required placeholder="123456" maxLength={6}
+                          style={{ textAlign: 'center', letterSpacing: 8, fontSize: 20, fontWeight: 700 }}
+                          value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))} />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                        <button type="button" className="btn btn-ghost" style={{ padding: 0, fontSize: 13, color: 'var(--text-tertiary)' }} onClick={() => setOtpStep('details')}>
+                          ← Change Phone Number
+                        </button>
+
+                        {cooldown > 0 ? (
+                          <span style={{ color: 'var(--text-tertiary)' }}>Resend in {cooldown}s</span>
+                        ) : (
+                          <button type="button" className="btn btn-ghost" style={{ padding: 0, fontSize: 13, color: 'var(--primary)' }} onClick={handleSendOTP} disabled={onboardingLoading}>
+                            Resend OTP
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                        <button type="button" className="btn btn-ghost" onClick={() => setShowOnboarding(false)} style={{ flex: 1 }}>Cancel</button>
+                        <button type="submit" className="btn btn-primary" disabled={onboardingLoading || otpCode.length !== 6} style={{ flex: 2 }}>
+                          {onboardingLoading ? 'Verifying...' : 'Verify OTP & Register'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </motion.div>
               </motion.div>
             )}

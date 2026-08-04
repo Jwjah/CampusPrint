@@ -75,10 +75,18 @@ const getFinishingPrice = (type, shop) => {
 /**
  * Calculate print pricing
  */
-const calculatePrice = ({ pages, copies, printType, layout, binding, binding_type, notes, shop }) => {
+const calculatePrice = ({ pages, copies, printType, layout, binding, binding_type, notes, shop, pages_per_sheet, pagesPerSheet }) => {
   const pricePerPage = printType === 'color' ? parseFloat(shop.price_color) : parseFloat(shop.price_bw);
-  const effectivePages = layout === 'double' ? Math.ceil(pages / 2) : pages;
-  const printCost = effectivePages * copies * pricePerPage;
+
+  // Resolve pages-per-sheet strictly from structured order data (pages_per_sheet -> pagesPerSheet -> default 1)
+  let pps = parseInt(pages_per_sheet !== undefined && pages_per_sheet !== null ? pages_per_sheet : pagesPerSheet);
+  if (!pps || isNaN(pps) || pps < 1) {
+    pps = 1;
+  }
+
+  const printedSheets = Math.ceil((pages || 0) / pps);
+  const numCopies = parseInt(copies) || 1;
+  const printCost = printedSheets * numCopies * pricePerPage;
 
   // Resolve binding/finishing option type
   let resolvedBindingType = (binding_type || 'none').toLowerCase();
@@ -107,6 +115,8 @@ const calculatePrice = ({ pages, copies, printType, layout, binding, binding_typ
   const price_stick_file_used = shop && shop.price_stick_file !== undefined ? parseFloat(shop.price_stick_file) : 10.00;
 
   return {
+    printedSheets,
+    pages_per_sheet: pps,
     printCost: parseFloat(printCost.toFixed(2)),
     bindingCost: parseFloat(bindingCost.toFixed(2)),
     total: parseFloat((printCost + bindingCost).toFixed(2)),

@@ -8,6 +8,7 @@ interface User {
   role: 'student' | 'shop' | 'agent' | 'admin';
   avatar?: string;
   phone?: string;
+  phone_verified?: boolean;
   hostel?: string;
   room_number?: string;
   is_delivery_partner?: boolean;

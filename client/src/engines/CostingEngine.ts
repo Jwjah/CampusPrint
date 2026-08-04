@@ -60,14 +60,16 @@ class CostingEngineClass implements IEngine {
 
     const pages = doc.metadata.pageCount;
     const copies = settings.copies || 1;
-    
-    // In CampusPrint, the price_bw and price_color apply per page.
+    const pagesPerSheet = settings.pagesPerSheet ? parseInt(String(settings.pagesPerSheet)) || 1 : 1;
+    const printedSheets = Math.ceil((pages || 0) / pagesPerSheet);
+
+    // In CampusPrint, the price_bw and price_color apply per printed sheet.
     let costPerPage = settings.colorMode === 'color' ? this.pricingConfig.price_color : this.pricingConfig.price_bw;
 
-    const baseCost = pages * costPerPage * copies;
+    const baseCost = printedSheets * costPerPage * copies;
     
     // Simplification for the UI display: baseCost shows BW equivalent, colorCost shows the delta if color
-    const bwEquivalentBase = pages * this.pricingConfig.price_bw * copies;
+    const bwEquivalentBase = printedSheets * this.pricingConfig.price_bw * copies;
     const colorCostDelta = settings.colorMode === 'color' ? baseCost - bwEquivalentBase : 0;
     
     // Simplification: if binding is selected in a future UI, we add binding cost.

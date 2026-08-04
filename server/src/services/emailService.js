@@ -7,7 +7,7 @@ require('dotenv').config();
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const SENDER_EMAIL = process.env.SMTP_USER || 'abhir2756@gmail.com';
+const SENDER_EMAIL = process.env.SMTP_USER || 'support.campusprint@gmail.com';
 
 let resendClient = null;
 let transporter = null;

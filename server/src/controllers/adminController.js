@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const { sendPushToUser } = require('../services/pushService');
+const { isMaintenanceModeEnabled, setMaintenanceMode } = require('../utils/maintenanceManager');
 
 // GET /api/admin/stats — Dashboard analytics
 exports.getStats = async (req, res) => {
@@ -380,5 +381,38 @@ exports.markRead = async (req, res) => {
   } catch (err) {
     console.error('Mark read error:', err);
     res.status(500).json({ error: 'Failed to mark read' });
+  }
+};
+
+// GET /api/admin/maintenance-mode — Fetch maintenance state
+exports.getMaintenanceMode = async (req, res) => {
+  try {
+    const maintenance = await isMaintenanceModeEnabled();
+    return res.json({ maintenance });
+  } catch (err) {
+    console.error('Get maintenance mode error:', err);
+    return res.status(500).json({ error: 'Failed to fetch maintenance mode state' });
+  }
+};
+
+// POST /api/admin/maintenance-mode — Toggle maintenance mode (Admin)
+exports.toggleMaintenanceMode = async (req, res) => {
+  try {
+    const { maintenance } = req.body;
+    if (typeof maintenance !== 'boolean') {
+      return res.status(400).json({ error: 'Maintenance state must be a boolean (true/false).' });
+    }
+
+    const updated = await setMaintenanceMode(maintenance);
+    console.log(`[ADMIN ACTION] Maintenance mode updated to: ${updated} by Admin ${req.user ? req.user.email : 'System'}`);
+
+    return res.json({
+      success: true,
+      maintenance: updated,
+      message: `Global maintenance mode has been ${updated ? 'ENABLED' : 'DISABLED'}.`
+    });
+  } catch (err) {
+    console.error('Toggle maintenance mode error:', err);
+    return res.status(500).json({ error: 'Failed to update maintenance mode state' });
   }
 };
