@@ -2,42 +2,79 @@ const db = require('../config/database');
 const { sendPushToUser } = require('../services/pushService');
 const { isMaintenanceModeEnabled, setMaintenanceMode } = require('../utils/maintenanceManager');
 
+let adminStatsCache = null;
+let adminStatsCacheTime = 0;
+const ADMIN_STATS_TTL_MS = 15000; // 15s in-memory cache
+
 // GET /api/admin/stats — Dashboard analytics
 exports.getStats = async (req, res) => {
   try {
-    const [[{ totalUsers }]] = await db.execute("SELECT COUNT(*) as totalUsers FROM users");
-    const [[{ totalStudents }]] = await db.execute("SELECT COUNT(*) as totalStudents FROM users WHERE role = 'student'");
-    const [[{ totalShops }]] = await db.execute("SELECT COUNT(*) as totalShops FROM shops WHERE is_approved = 1");
-    const [[{ pendingShops }]] = await db.execute("SELECT COUNT(*) as pendingShops FROM shops WHERE is_approved = 0");
-    const [[{ totalAgents }]] = await db.execute("SELECT COUNT(*) as totalAgents FROM users WHERE role = 'agent'");
-    const [[{ totalOrders }]] = await db.execute("SELECT COUNT(*) as totalOrders FROM orders");
-    const [[{ activeOrders }]] = await db.execute("SELECT COUNT(*) as activeOrders FROM orders WHERE status NOT IN ('delivered','cancelled')");
-    const [[{ totalRevenue }]] = await db.execute("SELECT COALESCE(SUM(total_price), 0) as totalRevenue FROM orders WHERE status = 'delivered'");
+    const now = Date.now();
+    if (adminStatsCache && (now - adminStatsCacheTime) < ADMIN_STATS_TTL_MS) {
+      return res.json(adminStatsCache);
+    }
 
-    // Orders by status
-    const [ordersByStatus] = await db.execute(
-      'SELECT status, COUNT(*) as count FROM orders GROUP BY status'
-    );
+    // Execute 6 consolidated queries concurrently in parallel using Promise.all()
+    const [
+      [[userCounts]],
+      [[shopCounts]],
+      [[orderCounts]],
+      [ordersByStatus],
+      [revenueByDay],
+      [topShops],
+    ] = await Promise.all([
+      db.execute(`
+        SELECT 
+          COUNT(*) as totalUsers,
+          COALESCE(SUM(CASE WHEN role = 'student' THEN 1 ELSE 0 END), 0) as totalStudents,
+          COALESCE(SUM(CASE WHEN role = 'agent' THEN 1 ELSE 0 END), 0) as totalAgents
+        FROM users
+      `),
+      db.execute(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN is_approved = 1 THEN 1 ELSE 0 END), 0) as totalShops,
+          COALESCE(SUM(CASE WHEN is_approved = 0 THEN 1 ELSE 0 END), 0) as pendingShops
+        FROM shops
+      `),
+      db.execute(`
+        SELECT 
+          COUNT(*) as totalOrders,
+          COALESCE(SUM(CASE WHEN status NOT IN ('delivered','cancelled') THEN 1 ELSE 0 END), 0) as activeOrders,
+          COALESCE(SUM(CASE WHEN status = 'delivered' THEN total_price ELSE 0 END), 0) as totalRevenue
+        FROM orders
+      `),
+      db.execute('SELECT status, COUNT(*) as count FROM orders GROUP BY status'),
+      db.execute(`
+        SELECT DATE(created_at) as date, SUM(total_price) as revenue, COUNT(*) as orders 
+        FROM orders WHERE status = 'delivered' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        GROUP BY DATE(created_at) ORDER BY date
+      `),
+      db.execute(`
+        SELECT s.shop_name, s.total_orders, s.wallet_balance, s.rating
+        FROM shops s WHERE s.is_approved = 1 ORDER BY s.total_orders DESC LIMIT 5
+      `),
+    ]);
 
-    // Revenue by day (last 30 days)
-    const [revenueByDay] = await db.execute(
-      `SELECT DATE(created_at) as date, SUM(total_price) as revenue, COUNT(*) as orders 
-       FROM orders WHERE status = 'delivered' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-       GROUP BY DATE(created_at) ORDER BY date`
-    );
+    const responsePayload = {
+      stats: {
+        totalUsers: Number(userCounts?.totalUsers || 0),
+        totalStudents: Number(userCounts?.totalStudents || 0),
+        totalShops: Number(shopCounts?.totalShops || 0),
+        pendingShops: Number(shopCounts?.pendingShops || 0),
+        totalAgents: Number(userCounts?.totalAgents || 0),
+        totalOrders: Number(orderCounts?.totalOrders || 0),
+        activeOrders: Number(orderCounts?.activeOrders || 0),
+        totalRevenue: parseFloat(orderCounts?.totalRevenue || 0),
+      },
+      ordersByStatus: ordersByStatus || [],
+      revenueByDay: revenueByDay || [],
+      topShops: topShops || [],
+    };
 
-    // Top shops
-    const [topShops] = await db.execute(
-      `SELECT s.shop_name, s.total_orders, s.wallet_balance, s.rating
-       FROM shops s WHERE s.is_approved = 1 ORDER BY s.total_orders DESC LIMIT 5`
-    );
+    adminStatsCache = responsePayload;
+    adminStatsCacheTime = now;
 
-    res.json({
-      stats: { totalUsers, totalStudents, totalShops, pendingShops, totalAgents, totalOrders, activeOrders, totalRevenue: parseFloat(totalRevenue) },
-      ordersByStatus,
-      revenueByDay,
-      topShops,
-    });
+    res.json(responsePayload);
   } catch (err) {
     console.error('Admin stats error:', err);
     res.status(500).json({ error: 'Failed to fetch stats' });

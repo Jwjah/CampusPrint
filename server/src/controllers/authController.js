@@ -5,20 +5,23 @@ const { sendOTP } = require('../services/emailService');
 const { generateOTP } = require('../utils/helpers');
 
 // POST /api/auth/register
+// POST /api/auth/register
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role, phone, hostel, room_number } = req.body;
+    let { name, email, password, role, phone, hostel, room_number } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
     }
+
+    email = email.trim().toLowerCase();
 
     const validRoles = ['student', 'shop', 'agent'];
     if (role && !validRoles.includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
 
-    const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+    const [existing] = await db.execute('SELECT id FROM users WHERE TRIM(LOWER(email)) = ?', [email]);
     if (existing.length) {
       return res.status(409).json({ error: 'Email already registered' });
     }
@@ -65,10 +68,18 @@ exports.register = async (req, res) => {
 // POST /api/auth/verify-otp
 exports.verifyOTP = async (req, res) => {
   try {
-    const { email, code } = req.body;
+    let { email, code } = req.body;
 
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and OTP code are required' });
+    }
+
+    email = String(email).trim().toLowerCase();
+    code = String(code).trim();
+
+    // Query unused OTP for email and code, avoiding server-local vs UTC SQL timezone mismatch in NOW()
     const [otps] = await db.execute(
-      'SELECT * FROM otp_codes WHERE email = ? AND code = ? AND is_used = 0 AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1',
+      'SELECT * FROM otp_codes WHERE TRIM(LOWER(email)) = ? AND TRIM(code) = ? AND is_used = 0 ORDER BY id DESC LIMIT 1',
       [email, code]
     );
 
@@ -76,10 +87,21 @@ exports.verifyOTP = async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    await db.execute('UPDATE otp_codes SET is_used = 1 WHERE id = ?', [otps[0].id]);
-    await db.execute('UPDATE users SET is_verified = 1 WHERE email = ?', [email]);
+    const otpRecord = otps[0];
+    const rawExpires = String(otpRecord.expires_at || '');
+    const expiryTime = new Date(rawExpires).getTime();
+    const utcExpiryTime = new Date(rawExpires.replace(' ', 'T') + 'Z').getTime();
+    const validExpiryTime = !isNaN(utcExpiryTime) ? utcExpiryTime : expiryTime;
 
-    const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+    // Reject if expired (comparing timestamps safely in JS regardless of DB timezone format)
+    if (!isNaN(validExpiryTime) && validExpiryTime < (Date.now() - 60000)) {
+      return res.status(400).json({ error: 'Invalid or expired OTP' });
+    }
+
+    await db.execute('UPDATE otp_codes SET is_used = 1 WHERE id = ?', [otpRecord.id]);
+    await db.execute('UPDATE users SET is_verified = 1 WHERE TRIM(LOWER(email)) = ?', [email]);
+
+    const [users] = await db.execute('SELECT * FROM users WHERE TRIM(LOWER(email)) = ?', [email]);
     const user = users[0];
 
     const token = jwt.sign(
