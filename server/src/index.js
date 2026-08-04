@@ -58,7 +58,7 @@ console.error = (...args) => {
 const app = express();
 
 // Trust reverse proxy headers (for Render, Vercel, etc.)
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // Security
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -340,7 +340,6 @@ const startDeliveryTimeoutChecker = () => {
 };
 
 const PORT = originalPort || process.env.PORT || 5000;
-const migrate = require('./migrations/migrate');
 
 const startServer = () => {
   app.listen(PORT, () => {
@@ -371,13 +370,4 @@ const startServer = () => {
   });
 };
 
-if (process.env.SKIP_MIGRATE === 'true') {
-  startServer();
-} else {
-  migrate()
-    .then(startServer)
-    .catch(err => {
-      console.error('❌ Failed to run database migrations during startup:', err);
-      startServer();
-    });
-}
+startServer();

@@ -279,8 +279,10 @@ const migrate = async () => {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_outbox_events_status ON outbox_events(status)`,
     `CREATE TABLE IF NOT EXISTS system_settings (
-      setting_key TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      setting_key TEXT UNIQUE NOT NULL,
       setting_value TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS feedback (
@@ -1393,6 +1395,30 @@ const migrate = async () => {
     `CREATE TABLE IF NOT EXISTS withdrawal_number_sequence (
       id INT AUTO_INCREMENT PRIMARY KEY,
       stub CHAR(1) NOT NULL UNIQUE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS system_settings (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      setting_key VARCHAR(100) UNIQUE NOT NULL,
+      setting_value TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS feedback (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      feedback_id VARCHAR(100) UNIQUE NOT NULL,
+      user_id INT NOT NULL,
+      role VARCHAR(50) NOT NULL,
+      category VARCHAR(50) NOT NULL,
+      subject VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      rating INT DEFAULT NULL,
+      attachment_url TEXT DEFAULT NULL,
+      order_id INT DEFAULT NULL,
+      status VARCHAR(50) NOT NULL DEFAULT 'New',
+      admin_notes TEXT DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   ];
 
@@ -1482,6 +1508,19 @@ const migrate = async () => {
     }
   } catch (err) {
     console.error('  ❌ Admin seed error:', err.message);
+  }
+
+  // Seed default system settings
+  try {
+    const [existingSetting] = await db.execute("SELECT setting_key FROM system_settings WHERE setting_key = 'maintenance_mode'");
+    if (!existingSetting || existingSetting.length === 0) {
+      await db.execute(
+        "INSERT INTO system_settings (setting_key, setting_value) VALUES ('maintenance_mode', 'false')"
+      );
+      console.log('  ⚙️ Default setting maintenance_mode=false seeded');
+    }
+  } catch (err) {
+    console.warn('  ⚠️ System settings seed warning:', err.message);
   }
 
   console.log('\n✅ All migrations complete!\n');
