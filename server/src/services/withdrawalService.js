@@ -147,7 +147,16 @@ exports.requestWithdrawal = async ({ userId, role, amount, idempotencyKey }) => 
       availableBalance = parseFloat(shops[0].wallet_balance || 0);
       heldBalance = parseFloat(shops[0].held_balance || 0);
       shopId = shops[0].id;
-    } else if (role === 'agent') {
+    } else if (role === 'agent' || role === 'student') {
+      if (role === 'student') {
+        const [agents] = await conn.execute(
+          'SELECT agent_id FROM delivery_agent_availability WHERE agent_id = ?',
+          [userId]
+        );
+        if (!agents.length) {
+          throw new Error('Unauthorized role for withdrawals');
+        }
+      }
       const [users] = await conn.execute(
         'SELECT wallet_balance, held_balance FROM users WHERE id = ?',
         [userId]
