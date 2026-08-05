@@ -4,6 +4,8 @@ const db = require('../config/database');
 const { sendOTP } = require('../services/emailService');
 const { generateOTP } = require('../utils/helpers');
 
+const INDIAN_PHONE_REGEX = /^[6-9]\d{9}$/;
+
 // POST /api/auth/register
 // POST /api/auth/register
 exports.register = async (req, res) => {
