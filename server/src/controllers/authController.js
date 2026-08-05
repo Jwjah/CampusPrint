@@ -463,7 +463,7 @@ exports.verifyAgentOTP = async (req, res) => {
     // Find active non-expired OTP record
     const [otps] = await db.execute(
       `SELECT * FROM otp_codes 
-       WHERE email = ? AND purpose = 'agent_phone_verify' AND is_used = 0 AND expires_at > NOW() 
+       WHERE email = ? AND purpose = 'agent_phone_verify' AND is_used = 0 
        ORDER BY created_at DESC LIMIT 1`,
       [req.user.email]
     );
@@ -473,6 +473,11 @@ exports.verifyAgentOTP = async (req, res) => {
     }
 
     const otpRecord = otps[0];
+
+    // Check expiration using JS Dates to avoid MySQL/SQLite timezone discrepancies
+    if (new Date(otpRecord.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'OTP has expired. Please request a new OTP.' });
+    }
 
     // Check maximum verification attempts (max 5)
     if (otpRecord.attempts >= 5) {
