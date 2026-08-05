@@ -182,7 +182,7 @@ export default function ServiceWorkerRegistrar() {
         channel.close();
       }
     };
-  }, [user]);
+  }, [user?.id]);
 
   return null;
 }
