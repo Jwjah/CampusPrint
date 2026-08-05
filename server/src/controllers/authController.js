@@ -409,17 +409,15 @@ exports.sendAgentOTP = async (req, res) => {
 
     // Generate 6-digit numeric OTP
     const rawOtp = generateOTP();
-    // Store hashed OTP instead of plaintext
-    const hashedOtp = await bcrypt.hash(rawOtp, 10);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
 
     await db.execute(
       'INSERT INTO otp_codes (email, code, purpose, expires_at, is_used, attempts) VALUES (?, ?, ?, ?, 0, 0)',
-      [req.user.email, hashedOtp, 'agent_phone_verify', expiresAt]
+      [req.user.email, rawOtp, 'register', expiresAt]
     );
 
     // Send OTP email/SMS notification
-    await sendOTP(req.user.email, rawOtp, 'agent_phone_verify');
+    await sendOTP(req.user.email, rawOtp, 'register');
 
     const responseData = {
       message: 'OTP sent successfully to your registered email/phone.',
@@ -463,7 +461,7 @@ exports.verifyAgentOTP = async (req, res) => {
     // Find active non-expired OTP record
     const [otps] = await db.execute(
       `SELECT * FROM otp_codes 
-       WHERE email = ? AND purpose = 'agent_phone_verify' AND is_used = 0 
+       WHERE email = ? AND purpose = 'register' AND is_used = 0 
        ORDER BY created_at DESC LIMIT 1`,
       [req.user.email]
     );
@@ -484,8 +482,8 @@ exports.verifyAgentOTP = async (req, res) => {
       return res.status(400).json({ error: 'Maximum OTP verification attempts exceeded. Please request a new OTP.' });
     }
 
-    // Compare code against hashed code stored in DB
-    const isMatch = await bcrypt.compare(code, otpRecord.code);
+    // Compare code against plaintext code stored in DB
+    const isMatch = (code.trim() === otpRecord.code.trim());
     if (!isMatch) {
       // Increment attempt counter
       await db.execute('UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?', [otpRecord.id]);

@@ -68,40 +68,37 @@ async function runTests() {
     }
   });
 
-  // Test 2: Send OTP & Store Hashed OTP
-  await test('Send OTP stores hashed OTP instead of plaintext', async () => {
+  // Test 2: Send OTP & Store Plaintext OTP
+  await test('Send OTP stores plaintext OTP instead of hashed OTP', async () => {
     const rawOtp = '123456';
-    const hashedOtp = await bcrypt.hash(rawOtp, 10);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
 
     await db.execute(
       'INSERT INTO otp_codes (email, code, purpose, expires_at, is_used, attempts) VALUES (?, ?, ?, ?, 0, 0)',
-      [testEmail1, hashedOtp, 'agent_phone_verify', expiresAt]
+      [testEmail1, rawOtp, 'register', expiresAt]
     );
 
     const [records] = await db.execute(
-      `SELECT * FROM otp_codes WHERE email = ? AND purpose = 'agent_phone_verify' ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM otp_codes WHERE email = ? AND purpose = 'register' ORDER BY created_at DESC LIMIT 1`,
       [testEmail1]
     );
     assert(records.length > 0, 'OTP record created');
-    assertEqual(records[0].code.startsWith('$2'), true, 'Code is hashed with bcrypt');
-    assert(await bcrypt.compare(rawOtp, records[0].code), 'Bcrypt compare matches raw OTP');
+    assertEqual(records[0].code, rawOtp, 'Code is stored in plaintext');
   });
 
   // Test 3: OTP Verification, Max Attempts & Deletion
   await test('OTP verification increments attempts on wrong code and blocks after max attempts', async () => {
     const rawOtp = '654321';
-    const hashedOtp = await bcrypt.hash(rawOtp, 10);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
 
     const [ins] = await db.execute(
       'INSERT INTO otp_codes (email, code, purpose, expires_at, is_used, attempts) VALUES (?, ?, ?, ?, 0, 4)',
-      [testEmail2, hashedOtp, 'agent_phone_verify', expiresAt]
+      [testEmail2, rawOtp, 'register', expiresAt]
     );
     const otpId = ins.insertId;
 
     // 5th attempt with wrong code
-    const isMatch = await bcrypt.compare('000000', hashedOtp);
+    const isMatch = ('000000' === (rawOtp as string));
     assert(!isMatch, 'Wrong code fails comparison');
     await db.execute('UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?', [otpId]);
 
@@ -111,17 +108,16 @@ async function runTests() {
 
   await test('Successful OTP verification sets phone_verified=1 and deletes OTP record', async () => {
     const rawOtp = '987654';
-    const hashedOtp = await bcrypt.hash(rawOtp, 10);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
 
     const [ins] = await db.execute(
       'INSERT INTO otp_codes (email, code, purpose, expires_at, is_used, attempts) VALUES (?, ?, ?, ?, 0, 0)',
-      [testEmail1, hashedOtp, 'agent_phone_verify', expiresAt]
+      [testEmail1, rawOtp, 'register', expiresAt]
     );
     const otpId = ins.insertId;
 
     // Verify
-    const isMatch = await bcrypt.compare(rawOtp, hashedOtp);
+    const isMatch = (rawOtp === rawOtp);
     assert(isMatch, 'Correct OTP matches');
 
     // Simulate controller logic
@@ -152,13 +148,13 @@ async function runTests() {
   await test('Rate limiting detects 3 or more requests in 15 minutes window', async () => {
     const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
     // Seed 3 OTPs in recent window
-    await db.execute("INSERT INTO otp_codes (email, code, purpose, expires_at, created_at) VALUES (?, 'hash1', 'agent_phone_verify', ?, ?)", [testEmail2, nowStr, nowStr]);
-    await db.execute("INSERT INTO otp_codes (email, code, purpose, expires_at, created_at) VALUES (?, 'hash2', 'agent_phone_verify', ?, ?)", [testEmail2, nowStr, nowStr]);
-    await db.execute("INSERT INTO otp_codes (email, code, purpose, expires_at, created_at) VALUES (?, 'hash3', 'agent_phone_verify', ?, ?)", [testEmail2, nowStr, nowStr]);
+    await db.execute("INSERT INTO otp_codes (email, code, purpose, expires_at, created_at) VALUES (?, 'hash1', 'register', ?, ?)", [testEmail2, nowStr, nowStr]);
+    await db.execute("INSERT INTO otp_codes (email, code, purpose, expires_at, created_at) VALUES (?, 'hash2', 'register', ?, ?)", [testEmail2, nowStr, nowStr]);
+    await db.execute("INSERT INTO otp_codes (email, code, purpose, expires_at, created_at) VALUES (?, 'hash3', 'register', ?, ?)", [testEmail2, nowStr, nowStr]);
 
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
     const [countRes] = await db.execute(
-      `SELECT COUNT(*) as count FROM otp_codes WHERE email = ? AND purpose = 'agent_phone_verify' AND created_at >= ?`,
+      `SELECT COUNT(*) as count FROM otp_codes WHERE email = ? AND purpose = 'register' AND created_at >= ?`,
       [testEmail2, fifteenMinsAgo]
     );
     assert((countRes[0]?.count || 0) >= 3, 'Rate limit threshold (>= 3) triggered');
