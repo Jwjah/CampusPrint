@@ -191,7 +191,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setOtpStep('details');
       setOtpCode('');
     }
-  }, [showOnboarding, user?.id]);
+  }, [showOnboarding]);
 
   useEffect(() => {
     if (user?.id) {
@@ -207,7 +207,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const interval = setInterval(fetchNotifs, 30000);
       return () => clearInterval(interval);
     }
-  }, [user?.id, pathname, loadUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, pathname]);
 
   const handleSendOTP = async () => {
     const phone = onboardingForm.phone.trim();
