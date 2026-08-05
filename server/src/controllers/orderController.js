@@ -114,7 +114,7 @@ exports.createOrder = async (req, res) => {
       shop,
     });
 
-    const deliveryFee = delivery_type === 'hostel' ? 15.00 : 0.00;
+    const deliveryFee = delivery_type === 'hostel' ? 1.50 : 0.00;
     const totalPrice = pricing.total + deliveryFee;
 
     // Generate unique hash
@@ -674,8 +674,8 @@ exports.changeFulfillment = async (req, res) => {
         if (!hostel_address || hostel_address.trim() === '') {
           throw new Error('Delivery address is required for hostel delivery');
         }
-        updatedFee = 15.00;
-        updatedPrice = parseFloat((parseFloat(order.total_price) + 15.00).toFixed(2));
+        updatedFee = 1.50;
+        updatedPrice = parseFloat((parseFloat(order.total_price) + 1.50).toFixed(2));
         
         // Generate delivery QR if not already present
         if (!deliveryQR) {
@@ -1015,7 +1015,7 @@ exports.reorderOrder = async (req, res) => {
       shop
     });
 
-    const deliveryFee = oldOrder.delivery_type === 'hostel' ? 15.00 : 0.00;
+    const deliveryFee = oldOrder.delivery_type === 'hostel' ? 1.50 : 0.00;
     const totalPrice = pricing.total + deliveryFee;
 
     // 7. Insert new order in a transaction block
