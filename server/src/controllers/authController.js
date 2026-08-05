@@ -433,7 +433,7 @@ exports.sendAgentOTP = async (req, res) => {
     return res.json(responseData);
   } catch (err) {
     console.error('Send agent OTP error:', err);
-    return res.status(500).json({ error: 'Failed to send OTP' });
+    return res.status(500).json({ error: `Failed to send OTP: ${err.message}` });
   }
 };
 

@@ -101,30 +101,34 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
 
   // 2. Try Brevo API if key is present
   if (BREVO_API_KEY) {
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'api-key': BREVO_API_KEY,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        sender: { name: 'CampusPrint', email: SENDER_EMAIL },
-        to: [{ email }],
-        subject: subjects[purpose] || subjects.verification,
-        htmlContent: html,
-      }),
-    });
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': BREVO_API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'CampusPrint', email: SENDER_EMAIL },
+          to: [{ email }],
+          subject: subjects[purpose] || subjects.verification,
+          htmlContent: html,
+        }),
+      });
 
-    const result = await response.json();
+      const result = await response.json();
 
-    if (!response.ok) {
-      console.error('❌ Brevo API error:', result.code || response.status);
-      throw new Error(result.message || 'Email delivery failed');
+      if (!response.ok) {
+        console.error('❌ Brevo API error:', result.code || response.status);
+        throw new Error(result.message || 'Email delivery failed');
+      }
+
+      console.log(`📧 OTP email dispatched to ${maskedEmail} via Brevo (messageId: ${result.messageId})`);
+      return;
+    } catch (brevoErr) {
+      console.error('❌ Brevo API error, trying fallback...', brevoErr.message);
     }
-
-    console.log(`📧 OTP email dispatched to ${maskedEmail} via Brevo (messageId: ${result.messageId})`);
-    return;
   }
 
   // 3. Try SMTP fallback
