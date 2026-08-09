@@ -168,8 +168,9 @@ function runInteractiveSetup() {
 
 // Function to download a file
 async function downloadFile(url, dest) {
+  const downloadUrl = url.includes('?') ? `${url}&token=${encodeURIComponent(AUTH_TOKEN)}` : `${url}?token=${encodeURIComponent(AUTH_TOKEN)}`;
   const response = await axios({
-    url,
+    url: downloadUrl,
     method: 'GET',
     responseType: 'stream',
     headers: AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {}
@@ -278,7 +279,8 @@ async function handleIncomingJobs(jobs) {
 }
 
 function startSseStream() {
-  const streamUrl = `${API_BASE_URL}/shops/${SHOP_ID}/stream-print`;
+  const baseUrl = `${API_BASE_URL}/shops/${SHOP_ID}/stream-print`;
+  const streamUrl = baseUrl.includes('?') ? `${baseUrl}&token=${encodeURIComponent(AUTH_TOKEN)}` : `${baseUrl}?token=${encodeURIComponent(AUTH_TOKEN)}`;
   console.log(`⚡ Connecting real-time print stream: ${streamUrl}`);
 
   try {
@@ -339,7 +341,8 @@ function startSseStream() {
 async function pollForJobs() {
   try {
     const response = await axios.get(`${API_BASE_URL}/shops/${SHOP_ID}/poll-print`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}` }
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+      params: { token: AUTH_TOKEN }
     });
 
     const jobs = response.data.jobs || [];
@@ -349,7 +352,11 @@ async function pollForJobs() {
     }
   } catch (error) {
     if (error.response && (error.response.status === 403 || error.response.status === 401)) {
-      console.error('❌ Authentication failed! Config token expired or shop was disconnected.');
+      console.error('❌ Authentication failed! Saved token is invalid/expired or shop account was disconnected.');
+      console.error('👉 Deleting invalid config and launching setup...');
+      try { fs.unlinkSync(CONFIG_PATH); } catch (e) {}
+      runInteractiveSetup();
+      return;
     } else {
       console.error('⚠️ Polling error:', error.message);
     }
@@ -392,7 +399,40 @@ async function ensureSumatraPDF() {
 
 async function startPolling() {
   console.log('\n🚀 CampusPrint Local Agent Started!');
-  console.log(`📡 Listening for print jobs for Shop ID: ${SHOP_ID}...`);
+  console.log(`📡 Server API URL: ${API_BASE_URL}`);
+  console.log(`🏪 Shop ID: ${SHOP_ID}`);
+
+  // Startup verification check
+  try {
+    console.log('⏳ Verifying shop authentication with server...');
+    const meRes = await axios.get(`${API_BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+      params: { token: AUTH_TOKEN }
+    });
+
+    const user = meRes.data?.user;
+    const shop = meRes.data?.shop;
+
+    if (!user || user.role !== 'shop' || !shop) {
+      console.error('\n❌ Authentication Failed: Account is not a registered shop owner.');
+      console.error('👉 Resetting configuration...');
+      try { fs.unlinkSync(CONFIG_PATH); } catch (e) {}
+      runInteractiveSetup();
+      return;
+    }
+
+    console.log(`✅ Authenticated! Logged in as: ${user.email} (${shop.name || 'Shop #' + SHOP_ID})`);
+  } catch (err) {
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      console.error('\n❌ Authentication Failed (401/403): Token expired or invalid.');
+      console.error('👉 Resetting configuration and launching interactive setup...');
+      try { fs.unlinkSync(CONFIG_PATH); } catch (e) {}
+      runInteractiveSetup();
+      return;
+    } else {
+      console.warn('⚠️ Could not verify token with server (Server offline or network issue):', err.message);
+    }
+  }
   
   if (process.platform === 'win32') {
     await ensureSumatraPDF();
