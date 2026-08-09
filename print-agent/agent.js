@@ -172,6 +172,7 @@ async function downloadFile(url, dest) {
     url,
     method: 'GET',
     responseType: 'stream',
+    headers: AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {}
   });
 
   return new Promise((resolve, reject) => {
@@ -198,19 +199,9 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single', or
     const settingsStr = `${printType === 'bw' ? 'monochrome' : 'color'},${layout === 'double' ? 'duplex' : 'simplex'},${copies}x,${orientation}`;
 
     if (fs.existsSync(exePath)) {
-      printCmd = `powershell -Command "` +
-        `$targetPrinter = (Get-CimInstance Win32_Printer | Where-Object { $_.Name -like '*${printType === 'bw' ? 'bw' : 'color'}*' -or $_.Name -like '*${printType === 'bw' ? 'mono' : 'colour'}*' -or $_.Name -like '*${printType === 'bw' ? 'gray' : 'chroma'}*' } | Select-Object -First 1).Name; ` +
-        `if (-not $targetPrinter) { $targetPrinter = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name }; ` +
-        `& '${exePath}' -print-to \\"$targetPrinter\\" -print-settings '${settingsStr}' -silent '${filePath}'` +
-        `"`;
+      printCmd = `"${exePath}" -print-to-default -print-settings "${settingsStr}" -silent "${filePath}"`;
     } else {
-      printCmd = `powershell -Command "` +
-        `$targetPrinter = (Get-CimInstance Win32_Printer | Where-Object { $_.Name -like '*${printType === 'bw' ? 'bw' : 'color'}*' -or $_.Name -like '*${printType === 'bw' ? 'mono' : 'colour'}*' -or $_.Name -like '*${printType === 'bw' ? 'gray' : 'chroma'}*' } | Select-Object -First 1).Name; ` +
-        `if (-not $targetPrinter) { $targetPrinter = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name }; ` +
-        `$val = Start-Process -FilePath '${filePath}' -Verb PrintTo -ArgumentList $targetPrinter -PassThru -WindowStyle Hidden; ` +
-        `Start-Sleep -Seconds 5; ` +
-        `If ($val) { Stop-Process -Id $val.Id -Force }` +
-        `"`;
+      printCmd = `powershell -Command "Start-Process -FilePath '${filePath}' -Verb Print"`;
     }
   } else {
     // macOS / Linux: Use lp command with native command-line options and robust fallbacks
@@ -241,8 +232,6 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single', or
     }
   });
 }
-
-const POLL_INTERVAL_MS = 15000;
 
 async function handleIncomingJobs(jobs) {
   if (!jobs || jobs.length === 0) return;
@@ -359,7 +348,7 @@ async function pollForJobs() {
       await handleIncomingJobs(jobs);
     }
   } catch (error) {
-    if (error.response && error.response.status === 403) {
+    if (error.response && (error.response.status === 403 || error.response.status === 401)) {
       console.error('❌ Authentication failed! Config token expired or shop was disconnected.');
     } else {
       console.error('⚠️ Polling error:', error.message);
@@ -375,7 +364,7 @@ async function ensureSumatraPDF() {
   if (fs.existsSync(exePath)) return true;
 
   console.log('📦 Windows detected: Downloading silent physical printing helper (SumatraPDF)...');
-  const url = 'https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-install.exe';
+  const url = 'https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64.exe';
   
   try {
     const response = await axios({
