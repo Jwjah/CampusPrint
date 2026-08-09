@@ -118,8 +118,8 @@ function runInteractiveSetup() {
             headers: { Authorization: `Bearer ${token}` }
           });
 
-          const user = profileRes.data?.user;
-          const shop = profileRes.data?.shop;
+          const user = (profileRes.data && profileRes.data.user) ? profileRes.data.user : null;
+          const shop = (profileRes.data && profileRes.data.shop) ? profileRes.data.shop : null;
 
           if (!user || user.role !== 'shop' || !shop) {
             console.error('❌ Authentication failed: This account does not own a registered shop or details are invalid.');
@@ -410,8 +410,8 @@ async function startPolling() {
       params: { token: AUTH_TOKEN }
     });
 
-    const user = meRes.data?.user;
-    const shop = meRes.data?.shop;
+    const user = (meRes.data && meRes.data.user) ? meRes.data.user : null;
+    const shop = (meRes.data && meRes.data.shop) ? meRes.data.shop : null;
 
     if (!user || user.role !== 'shop' || !shop) {
       console.error('\n❌ Authentication Failed: Account is not a registered shop owner.');
@@ -423,7 +423,8 @@ async function startPolling() {
 
     console.log(`✅ Authenticated! Logged in as: ${user.email} (${shop.name || 'Shop #' + SHOP_ID})`);
   } catch (err) {
-    if (err.response?.status === 401 || err.response?.status === 403) {
+    const status = err.response && err.response.status;
+    if (status === 401 || status === 403) {
       console.error('\n❌ Authentication Failed (401/403): Token expired or invalid.');
       console.error('👉 Resetting configuration and launching interactive setup...');
       try { fs.unlinkSync(CONFIG_PATH); } catch (e) {}
