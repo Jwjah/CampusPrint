@@ -231,42 +231,18 @@ export default function QueuePage() {
                     </div>
                   )}
 
-                  {/* Files & First-Page Preview for Shop Identification */}
+                  {/* Middle: Large First-Page Document Preview */}
                   {order.files && order.files.length > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {order.files.map((file: any) => (
-                          <div key={file.id} className="glass-card" style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <ThumbnailPreview filePath={file.file_path || file.path} fileName={file.name || file.original_name} />
-                              <div>
-                                <div style={{ fontSize: 13, fontWeight: 700, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name || file.original_name}</div>
-                                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{file.pages} pages</div>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                              <button 
-                                className="btn btn-secondary btn-sm" 
-                                style={{ padding: '4px 10px', fontSize: 11 }}
-                                onClick={async () => {
-                                  try {
-                                    const { data } = await api.get(`/orders/files/${file.id}/download`);
-                                    window.open(data.url, '_blank');
-                                  } catch (err) {
-                                    toast.error('Failed to open file');
-                                  }
-                                }}
-                              >
-                                View File
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                    <div>
+                      <LargeDocumentPreview 
+                        filePath={order.files[0].file_path || order.files[0].path} 
+                        fileName={order.files[0].name || order.files[0].original_name} 
+                      />
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  {/* Bottom: Action Buttons */}
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', alignItems: 'center', marginTop: 12 }}>
                     {order.status === 'pending' && (
                       <TapButton className="btn btn-danger btn-sm" onClick={() => updateStatus(order.id, 'cancelled')}>
                         ✕ Reject
@@ -275,8 +251,8 @@ export default function QueuePage() {
                     
                     {(order.status === 'pending' || order.status === 'confirmed') && (
                       <TapButton 
-                        className="btn btn-primary btn-sm" 
-                        style={{ background: 'linear-gradient(135deg, #ec4899, #8b5cf6)', boxShadow: '0 4px 15px rgba(236, 72, 153, 0.4)' }}
+                        className="btn btn-primary" 
+                        style={{ background: 'linear-gradient(135deg, #ec4899, #8b5cf6)', boxShadow: '0 4px 15px rgba(236, 72, 153, 0.4)', padding: '10px 20px', fontSize: 14, fontWeight: 700, borderRadius: 10 }}
                         onClick={() => triggerPrint(order.id, order.shop_id)}
                       >
                         🖨️ ONE-CLICK PRINT
@@ -285,22 +261,46 @@ export default function QueuePage() {
 
                     {order.status === 'ready' && (order.delivery_type === 'pickup' || order.delivery_type === 'self_pickup') && (
                       <TapButton 
-                        className="btn btn-success btn-sm" 
-                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 15px rgba(34, 197, 94, 0.4)' }}
+                        className="btn btn-success" 
+                        style={{
+                          background: 'linear-gradient(135deg, #10b981, #059669)',
+                          boxShadow: '0 4px 18px rgba(16, 185, 129, 0.4)',
+                          padding: '10px 22px',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          borderRadius: 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
                         onClick={() => markAsDelivered(order.id)}
                       >
-                        ✅ MARK AS DELIVERED
+                        <span>✓</span> MARK AS DELIVERED
                       </TapButton>
                     )}
 
                     {order.status === 'ready' && (
-                      <TapButton className="btn btn-secondary btn-sm" onClick={() => setQrModalOrder(order)}>
+                      <TapButton 
+                        className="btn btn-secondary" 
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          padding: '10px 18px',
+                          fontSize: 14,
+                          fontWeight: 600,
+                          borderRadius: 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                        onClick={() => setQrModalOrder(order)}
+                      >
                         📱 View Code
                       </TapButton>
                     )}
 
                     {order.status === 'printing' && (
-                      <TapButton className="btn btn-success btn-sm" onClick={() => updateStatus(order.id, 'ready')}>
+                      <TapButton className="btn btn-success" style={{ padding: '10px 20px', fontSize: 14, fontWeight: 700, borderRadius: 10 }} onClick={() => updateStatus(order.id, 'ready')}>
                         ✅ Mark as Ready
                       </TapButton>
                     )}
@@ -382,34 +382,70 @@ export default function QueuePage() {
   );
 }
 
-function ThumbnailPreview({ filePath, fileName }: { filePath: string; fileName: string }) {
+function LargeDocumentPreview({ filePath, fileName }: { filePath: string; fileName: string }) {
   const [error, setError] = useState(false);
 
-  let thumbUrl = filePath;
+  let previewUrl = filePath;
   if (filePath && filePath.includes('cloudinary.com')) {
     if (filePath.toLowerCase().endsWith('.pdf')) {
-      thumbUrl = filePath.replace('/upload/', '/upload/pg_1,w_160,h_200,c_fill,f_jpg/').replace(/\.pdf$/i, '.jpg');
+      previewUrl = filePath.replace('/upload/', '/upload/pg_1,w_800,c_fit,f_jpg/').replace(/\.pdf$/i, '.jpg');
     } else {
-      thumbUrl = filePath.replace('/upload/', '/upload/w_160,h_200,c_fill/');
+      previewUrl = filePath.replace('/upload/', '/upload/w_800,c_fit/');
     }
   }
 
-  if (error || !thumbUrl) {
+  if (error || !previewUrl) {
     return (
-      <div style={{ width: 50, height: 65, background: 'var(--bg-tertiary)', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: 'var(--text-tertiary)', border: '1px solid var(--border)', textAlign: 'center', padding: 2 }}>
-        <span style={{ fontSize: 14 }}>📄</span>
-        <span>Preview unavailable</span>
+      <div style={{
+        width: '100%',
+        padding: '36px 20px',
+        background: 'rgba(0, 0, 0, 0.3)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--text-tertiary)',
+        gap: 8,
+        margin: '16px 0',
+      }}>
+        <span style={{ fontSize: 32, opacity: 0.6 }}>📄</span>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>Preview unavailable</span>
       </div>
     );
   }
 
   return (
-    <img 
-      src={thumbUrl} 
-      alt={fileName || 'First page preview'} 
-      loading="lazy" 
-      onError={() => setError(true)} 
-      style={{ width: 50, height: 65, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }} 
-    />
+    <div style={{
+      width: '100%',
+      padding: '20px 16px',
+      background: 'rgba(0, 0, 0, 0.3)',
+      border: '1px solid rgba(255, 255, 255, 0.08)',
+      borderRadius: 12,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      margin: '16px 0',
+      overflow: 'hidden',
+    }}>
+      <img
+        src={previewUrl}
+        alt={fileName || 'First page preview'}
+        loading="lazy"
+        onError={() => setError(true)}
+        style={{
+          width: '100%',
+          maxWidth: 440,
+          maxHeight: 560,
+          height: 'auto',
+          objectFit: 'contain',
+          borderRadius: 8,
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.6)',
+          background: '#ffffff',
+        }}
+      />
+    </div>
   );
 }
