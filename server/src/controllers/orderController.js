@@ -1,5 +1,5 @@
 const db = require('../config/database');
-const { generateOrderHash, generateQRCode, calculatePrice, generateOTP } = require('../utils/helpers');
+const { generateOrderHash, generateQRCode, calculatePrice, generateOTP, generate4DigitCode } = require('../utils/helpers');
 const { PDFDocument } = require('pdf-lib');
 const { uploadToCloudinary, verifyMagicBytes } = require('../middleware/upload');
 const { sendPushToUser } = require('../services/pushService');
@@ -129,9 +129,9 @@ exports.createOrder = async (req, res) => {
     // Generate unique hash
     const orderHash = generateOrderHash(Date.now(), req.user.id);
 
-    // Generate random verification codes: Alphanumeric for Pickup, 6-digit numeric for Delivery
-    const pickupCode = `CP${orderHash.substring(0, 8).toUpperCase()}`;
-    const deliveryCode = delivery_type === 'hostel' ? generateOTP() : null;
+    // Generate cryptographically secure 4-digit verification codes (0000-9999)
+    const pickupCode = generate4DigitCode();
+    const deliveryCode = delivery_type === 'hostel' ? generate4DigitCode() : null;
 
     // Create order
     const [result] = await db.execute(
@@ -1114,8 +1114,8 @@ exports.reorderOrder = async (req, res) => {
     // 7. Insert new order in a transaction block
     const newOrderId = await db.transaction(async (conn) => {
       const newOrderHash = generateOrderHash(Date.now(), req.user.id);
-      const pickupCode = `CP${newOrderHash.substring(0, 8).toUpperCase()}`;
-      const deliveryCode = oldOrder.delivery_type === 'hostel' ? generateOTP() : null;
+      const pickupCode = generate4DigitCode();
+      const deliveryCode = oldOrder.delivery_type === 'hostel' ? generate4DigitCode() : null;
       
       const [result] = await conn.execute(
         `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used, pickup_code, delivery_code) 

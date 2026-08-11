@@ -119,16 +119,22 @@ export default function AgentScannerPage() {
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', display: 'block', marginBottom: 6 }}>
-                  {scanType === 'pickup' ? 'Shop Pickup Code' : 'Delivery Code'} (from printed document)
+                  {scanType === 'pickup' ? 'Shop Pickup Code (4 digits)' : 'Delivery Code (4 digits)'}
                 </label>
                 <input 
                   type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={10}
                   className="input" 
-                  placeholder={scanType === 'pickup' ? "e.g. CP7D7C3E79" : "e.g. 123456"} 
+                  placeholder="0000" 
                   value={manualCode} 
-                  onChange={e => { setManualCode(e.target.value); setCodeError(null); }} 
-                  style={{ textAlign: 'center', fontSize: 20, letterSpacing: 2, fontWeight: 700, width: '100%' }} 
+                  onChange={e => { setManualCode(e.target.value.trim()); setCodeError(null); }} 
+                  style={{ textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: 700, fontFamily: 'monospace', width: '100%' }} 
                 />
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4, display: 'block' }}>
+                  Enter the 4-digit verification code (e.g. 5832)
+                </span>
               </div>
               {codeError && <p style={{ color: 'var(--error)', fontSize: 13, margin: 0 }}>{codeError}</p>}
               <button className={`btn ${scanType === 'pickup' ? 'btn-primary' : 'btn-success'}`} style={{ width: '100%', height: 56, fontSize: 16 }} onClick={handleManualVerify} disabled={loading || !manualOrderId.trim() || !manualCode.trim()}>

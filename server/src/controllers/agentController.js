@@ -200,34 +200,73 @@ exports.verifyPickup = async (req, res) => {
   }
 };
 
-// POST /api/agent/verify-delivery — Verify delivery with QR
+// Rate Limiter map for failed verification attempts: orderId -> { count: number, lockedUntil: number }
+const verificationAttemptsMap = new Map();
+const MAX_FAILED_VERIFICATION_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout after 5 failed attempts
+
+function isOrderVerificationLocked(orderId) {
+  const attempt = verificationAttemptsMap.get(String(orderId));
+  if (attempt && attempt.count >= MAX_FAILED_VERIFICATION_ATTEMPTS) {
+    if (Date.now() < attempt.lockedUntil) {
+      return true;
+    }
+    verificationAttemptsMap.delete(String(orderId));
+  }
+  return false;
+}
+
+function recordFailedAttempt(orderId) {
+  const key = String(orderId);
+  const attempt = verificationAttemptsMap.get(key) || { count: 0, lockedUntil: 0 };
+  attempt.count += 1;
+  if (attempt.count >= MAX_FAILED_VERIFICATION_ATTEMPTS) {
+    attempt.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+  }
+  verificationAttemptsMap.set(key, attempt);
+}
+
+function clearFailedAttempts(orderId) {
+  verificationAttemptsMap.delete(String(orderId));
+}
+
+// POST /api/agent/verify-delivery — Verify delivery with QR or 4-digit code
 exports.verifyDelivery = async (req, res) => {
   try {
     const { orderId, hash, code } = req.body;
 
+    if (isOrderVerificationLocked(orderId)) {
+      return res.status(429).json({ error: 'Too many failed verification attempts. Please wait 15 minutes before trying again.' });
+    }
+
     const [anyOrder] = await db.execute('SELECT * FROM orders WHERE id = ?', [orderId]);
     if (!anyOrder.length) {
-      return res.status(404).json({ error: 'Order not found' });
+      recordFailedAttempt(orderId);
+      return res.status(400).json({ error: 'Invalid verification code or unauthorized request.' });
     }
     const order = anyOrder[0];
 
     if (hash) {
       if (order.order_hash !== hash) {
-        return res.status(400).json({ error: 'Invalid QR code. This code is not recognized in the system.' });
+        recordFailedAttempt(orderId);
+        return res.status(400).json({ error: 'Invalid verification code or unauthorized request.' });
       }
     } else if (code) {
-      if (!order.delivery_code || order.delivery_code.trim().toUpperCase() !== code.trim().toUpperCase()) {
-        return res.status(400).json({ error: 'Invalid verification number. Please check and try again.' });
+      const suppliedCode = code.trim().toUpperCase();
+      if (!order.delivery_code || order.delivery_code.trim().toUpperCase() !== suppliedCode) {
+        recordFailedAttempt(orderId);
+        return res.status(400).json({ error: 'Invalid verification code or unauthorized request.' });
       }
     } else {
-      return res.status(400).json({ error: 'QR hash or verification number required' });
+      return res.status(400).json({ error: 'QR hash or verification code required.' });
     }
 
     if (order.agent_id !== req.user.id || order.status !== 'out_for_delivery') {
-      return res.status(400).json({ error: 'Order is not in out_for_delivery state or not assigned to you.' });
+      recordFailedAttempt(orderId);
+      return res.status(400).json({ error: 'Invalid verification code or unauthorized request.' });
     }
 
-    const suppliedCode = (code || '').trim();
+    const suppliedCode = (code || hash || '').trim();
     // Wrap in a transaction to prevent double-credit race conditions.
     // The WHERE clause on status, agent_id, and delivery_code acts as an optimistic lock.
     let earning = 0;
@@ -261,6 +300,8 @@ exports.verifyDelivery = async (req, res) => {
         );
       }
     });
+
+    clearFailedAttempts(orderId);
 
     // Notifications happen outside transaction (non-critical)
     if (earning > 0) {

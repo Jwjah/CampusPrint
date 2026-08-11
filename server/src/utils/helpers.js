@@ -51,6 +51,13 @@ const generateOTP = () => {
   return require('crypto').randomInt(100000, 999999).toString();
 };
 
+/**
+ * Generate a cryptographically secure 4-digit numeric verification code (0000-9999)
+ */
+const generate4DigitCode = () => {
+  return crypto.randomInt(0, 10000).toString().padStart(4, '0');
+};
+
 // Centralized pricing configuration
 const PRICING_CONFIG = {
   finishing: {
@@ -150,4 +157,4 @@ const calculatePrice = ({ pages, copies, printType, layout, print_sides, printSi
   };
 };
 
-module.exports = { generateOrderHash, generateOrderIdStr, generateQRCode, generateOTP, calculatePrice, PRICING_CONFIG, getFinishingPrice };
+module.exports = { generateOrderHash, generateOrderIdStr, generateQRCode, generateOTP, generate4DigitCode, calculatePrice, PRICING_CONFIG, getFinishingPrice };
