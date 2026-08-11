@@ -379,7 +379,7 @@ export default function QueuePage() {
       )}
 
 
-      {/* QR Display Modal for Shop */}
+      {/* QR & Code Display Modal for Shop */}
       <ModalOverlay isOpen={!!qrModalOrder} onClose={() => setQrModalOrder(null)}>
         {qrModalOrder && (
           <div className="glass-card" style={{ padding: 32, textAlign: 'center' }}>
@@ -387,11 +387,18 @@ export default function QueuePage() {
               ✅
             </div>
             <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Print Ready!</h2>
-            <p style={{ color: 'var(--text-tertiary)', fontSize: 14, marginBottom: 24 }}>
-              Verify student identity or enter pickup code to complete handover.
+            <p style={{ color: 'var(--text-tertiary)', fontSize: 14, marginBottom: 20 }}>
+              Scan this QR code or verify the pickup code to complete handover.
             </p>
+
+            {qrModalOrder.pickup_qr && (
+              <div className="qr-container" style={{ background: '#fff', padding: 16, borderRadius: 16, display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', marginBottom: 16 }}>
+                <img src={qrModalOrder.pickup_qr} alt="Pickup QR Code" style={{ width: 200, height: 200, display: 'block' }} />
+              </div>
+            )}
+
             {qrModalOrder.pickup_code && (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>
                   Pickup Code:
                 </div>
@@ -400,7 +407,7 @@ export default function QueuePage() {
                 </div>
               </div>
             )}
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: 32 }} onClick={() => setQrModalOrder(null)}>
+            <button className="btn btn-primary" style={{ width: '100%', marginTop: 28 }} onClick={() => setQrModalOrder(null)}>
               Close View
             </button>
           </div>
