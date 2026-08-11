@@ -391,11 +391,14 @@ export default function QueuePage() {
               Scan this QR code or verify the pickup code to complete handover.
             </p>
 
-            {qrModalOrder.pickup_qr && (
-              <div className="qr-container" style={{ background: '#fff', padding: 16, borderRadius: 16, display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', marginBottom: 16 }}>
-                <img src={qrModalOrder.pickup_qr} alt="Pickup QR Code" style={{ width: 200, height: 200, display: 'block' }} />
-              </div>
-            )}
+            {(() => {
+              const qrSource = qrModalOrder.pickup_qr || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrModalOrder.order_hash || qrModalOrder.pickup_code || 'CAMPUSPRINT')}`;
+              return (
+                <div className="qr-container" style={{ background: '#fff', padding: 16, borderRadius: 16, display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', marginBottom: 16 }}>
+                  <img src={qrSource} alt="Pickup QR Code" style={{ width: 200, height: 200, display: 'block' }} />
+                </div>
+              );
+            })()}
 
             {qrModalOrder.pickup_code && (
               <div style={{ marginTop: 8 }}>
