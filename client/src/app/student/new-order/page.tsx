@@ -179,6 +179,7 @@ export default function NewOrderPage() {
       finalConfig.notes = `[Format: ${config.paper}, ${config.orientation}, ${config.pages_per_sheet} pg/sheet, Binding: ${config.binding_type}]\n${config.notes}`.trim();
       
       Object.entries(finalConfig).forEach(([k, v]) => formData.append(k, String(v)));
+      formData.append('print_sides', config.layout === 'double' ? 'duplex' : 'single');
 
       const { data } = await api.post('/orders', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -376,8 +377,15 @@ export default function NewOrderPage() {
                       <span className={`badge ${shop.is_open ? 'badge-delivered' : 'badge-cancelled'}`}>{shop.is_open ? '● Open' : '● Closed'}</span>
                     </div>
                     <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 12 }}>📍 {shop.location}</p>
-                    <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
-                      <span>B&W: ₹{shop.price_bw}</span><span>Color: ₹{shop.price_color}</span><span>⭐ {shop.rating || 'New'}</span>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <span>B&W Single: ₹{shop.price_bw}</span>
+                      <span>Color Single: ₹{shop.price_color}</span>
+                      {shop.supports_duplex_printing ? (
+                        <span style={{ color: 'var(--primary)' }}>B&W Duplex: ₹{shop.price_bw_duplex || 1.5}</span>
+                      ) : (
+                        <span style={{ color: 'var(--text-tertiary)' }}>Duplex: N/A</span>
+                      )}
+                      <span>⭐ {shop.rating || 'New'}</span>
                     </div>
                   </motion.div>
                 </StaggerItem>
@@ -403,7 +411,34 @@ export default function NewOrderPage() {
                       <option value="color">🌈 Color</option>
                     </select>
                   </div>
-                  <div className="input-group"><label>Sides</label><select className="input" value={config.layout} onChange={(e) => setConfig({ ...config, layout: e.target.value })}><option value="single">Single-sided</option><option value="double">Double-sided</option></select></div>
+                  <div className="input-group">
+                    <label>Print Sides</label>
+                    {(() => {
+                      const shopObj = shops.find(s => s.id === selectedShop);
+                      const supportsDuplex = shopObj?.supports_duplex_printing;
+                      return (
+                        <>
+                          <select 
+                            className="input" 
+                            value={config.layout} 
+                            onChange={(e) => setConfig({ ...config, layout: e.target.value })}
+                          >
+                            <option value="single">Single-sided ({shopObj ? `₹${config.print_type === 'color' ? shopObj.price_color : shopObj.price_bw}/pg` : ''})</option>
+                            <option value="double" disabled={!supportsDuplex}>
+                              {supportsDuplex 
+                                ? `Double-sided (₹${config.print_type === 'color' ? (shopObj?.price_color_duplex || 4) : (shopObj?.price_bw_duplex || 1.5)}/pg)` 
+                                : 'Double-sided (DISABLED / NOT SUPPORTED BY THIS SHOP)'}
+                            </option>
+                          </select>
+                          {!supportsDuplex && (
+                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>
+                              Double-sided printing is not supported by this shop.
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                   <div className="input-group"><label>Paper Size</label><select className="input" value={config.paper} onChange={(e) => setConfig({ ...config, paper: e.target.value })}><option value="A4">A4 (Standard)</option><option value="legal">Legal</option></select></div>
                   <div className="input-group"><label>Orientation</label><select className="input" value={config.orientation} onChange={(e) => setConfig({ ...config, orientation: e.target.value })}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></div>
                   <div className="input-group"><label>Pages per Sheet</label><select className="input" value={config.pages_per_sheet} onChange={(e) => setConfig({ ...config, pages_per_sheet: e.target.value })}><option value="1">1 Page / Sheet</option><option value="2">2 Pages / Sheet</option><option value="4">4 Pages / Sheet</option></select></div>

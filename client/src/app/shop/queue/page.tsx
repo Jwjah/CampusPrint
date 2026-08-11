@@ -48,6 +48,16 @@ export default function QueuePage() {
     }
   };
 
+  const markAsDelivered = async (orderId: number) => {
+    try {
+      await api.post(`/orders/${orderId}/shop-deliver`);
+      toast.success('🎉 Order marked as delivered!');
+      loadOrders();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to deliver order');
+    }
+  };
+
   const triggerPrint = async (orderId: number, shopId: number) => {
     try {
       await api.post(`/shops/${shopId}/trigger-print`, { orderId });
@@ -221,17 +231,17 @@ export default function QueuePage() {
                     </div>
                   )}
 
-                  {/* Files for Shop */}
+                  {/* Files & First-Page Preview for Shop Identification */}
                   {order.files && order.files.length > 0 && (
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {order.files.map((file: any) => (
                           <div key={file.id} className="glass-card" style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 16 }}>📄</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <ThumbnailPreview filePath={file.file_path || file.path} fileName={file.name || file.original_name} />
                               <div>
-                                <div style={{ fontSize: 12, fontWeight: 600, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</div>
-                                <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{file.pages} pages</div>
+                                <div style={{ fontSize: 13, fontWeight: 700, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name || file.original_name}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{file.pages} pages</div>
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: 6 }}>
@@ -247,26 +257,8 @@ export default function QueuePage() {
                                   }
                                 }}
                               >
-                                View Original
+                                View File
                               </button>
-                              {file.name.toLowerCase().endsWith('.pdf') && (
-                                <button 
-                                  className="btn btn-outline btn-sm" 
-                                  style={{ padding: '4px 10px', fontSize: 11, borderColor: 'var(--primary)', color: 'var(--primary)' }}
-                                  onClick={async () => {
-                                    try {
-                                      const token = localStorage.getItem('token') || '';
-                                      const apiBase = api.defaults.baseURL || '';
-                                      const printPdfUrl = `${apiBase}/orders/files/${file.id}/print-pdf?token=${token}`;
-                                      window.open(printPdfUrl, '_blank');
-                                    } catch (err) {
-                                      toast.error('Failed to open print PDF');
-                                    }
-                                  }}
-                                >
-                                  View Print PDF (with QR)
-                                </button>
-                              )}
                             </div>
                           </div>
                         ))}
@@ -291,9 +283,19 @@ export default function QueuePage() {
                       </TapButton>
                     )}
 
+                    {order.status === 'ready' && (order.delivery_type === 'pickup' || order.delivery_type === 'self_pickup') && (
+                      <TapButton 
+                        className="btn btn-success btn-sm" 
+                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 15px rgba(34, 197, 94, 0.4)' }}
+                        onClick={() => markAsDelivered(order.id)}
+                      >
+                        ✅ MARK AS DELIVERED
+                      </TapButton>
+                    )}
+
                     {order.status === 'ready' && (
                       <TapButton className="btn btn-secondary btn-sm" onClick={() => setQrModalOrder(order)}>
-                        📱 View QR
+                        📱 View Code
                       </TapButton>
                     )}
 
@@ -358,17 +360,14 @@ export default function QueuePage() {
             </div>
             <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Print Ready!</h2>
             <p style={{ color: 'var(--text-tertiary)', fontSize: 14, marginBottom: 24 }}>
-              Show this QR code to the student to complete the handover.
+              Verify student identity or enter pickup code to complete handover.
             </p>
-            <div className="qr-container" style={{ background: '#fff', padding: 16, borderRadius: 16, display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-              <img src={qrModalOrder.pickup_qr} alt="Pickup QR" style={{ width: 200, height: 200 }} />
-            </div>
             {qrModalOrder.pickup_code && (
-              <div style={{ marginTop: 20 }}>
+              <div style={{ marginTop: 10 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>
-                  Or share this pickup code with the student:
+                  Pickup Code:
                 </div>
-                <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: 10, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: 8, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
                   {qrModalOrder.pickup_code}
                 </div>
               </div>
@@ -380,5 +379,37 @@ export default function QueuePage() {
         )}
       </ModalOverlay>
     </div>
+  );
+}
+
+function ThumbnailPreview({ filePath, fileName }: { filePath: string; fileName: string }) {
+  const [error, setError] = useState(false);
+
+  let thumbUrl = filePath;
+  if (filePath && filePath.includes('cloudinary.com')) {
+    if (filePath.toLowerCase().endsWith('.pdf')) {
+      thumbUrl = filePath.replace('/upload/', '/upload/pg_1,w_160,h_200,c_fill,f_jpg/').replace(/\.pdf$/i, '.jpg');
+    } else {
+      thumbUrl = filePath.replace('/upload/', '/upload/w_160,h_200,c_fill/');
+    }
+  }
+
+  if (error || !thumbUrl) {
+    return (
+      <div style={{ width: 50, height: 65, background: 'var(--bg-tertiary)', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: 'var(--text-tertiary)', border: '1px solid var(--border)', textAlign: 'center', padding: 2 }}>
+        <span style={{ fontSize: 14 }}>📄</span>
+        <span>Preview unavailable</span>
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={thumbUrl} 
+      alt={fileName || 'First page preview'} 
+      loading="lazy" 
+      onError={() => setError(true)} 
+      style={{ width: 50, height: 65, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }} 
+    />
   );
 }

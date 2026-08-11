@@ -75,46 +75,66 @@ const getFinishingPrice = (type, shop) => {
 /**
  * Calculate print pricing
  */
-const calculatePrice = ({ pages, copies, printType, layout, binding, binding_type, notes, shop, pages_per_sheet, pagesPerSheet }) => {
-  const pricePerPage = printType === 'color' ? parseFloat(shop.price_color) : parseFloat(shop.price_bw);
+const calculatePrice = ({ pages, copies, printType, layout, print_sides, printSides, binding, binding_type, notes, shop, pages_per_sheet, pagesPerSheet }) => {
+  // Resolve print sides: 'single' or 'duplex'
+  let resolvedSides = 'single';
+  if (print_sides) {
+    resolvedSides = String(print_sides).toLowerCase() === 'duplex' ? 'duplex' : 'single';
+  } else if (printSides) {
+    resolvedSides = String(printSides).toLowerCase() === 'duplex' ? 'duplex' : 'single';
+  } else if (layout === 'double' || layout === 'duplex') {
+    resolvedSides = 'duplex';
+  }
 
-  // Resolve pages-per-sheet strictly from structured order data (pages_per_sheet -> pagesPerSheet -> default 1)
+  // Price snapshots
+  const price_bw_used = shop && shop.price_bw !== undefined ? parseFloat(shop.price_bw) : 2.00;
+  const price_color_used = shop && shop.price_color !== undefined ? parseFloat(shop.price_color) : 5.00;
+  const price_bw_duplex_used = shop && shop.price_bw_duplex !== undefined ? parseFloat(shop.price_bw_duplex) : 1.50;
+  const price_color_duplex_used = shop && shop.price_color_duplex !== undefined ? parseFloat(shop.price_color_duplex) : 4.00;
+  const price_binding_used = shop && shop.price_binding !== undefined ? parseFloat(shop.price_binding) : 30.00;
+  const price_stick_file_used = shop && shop.price_stick_file !== undefined ? parseFloat(shop.price_stick_file) : 10.00;
+
+  // Determine rate per page for requested mode
+  let price_printing_mode_used;
+  if (resolvedSides === 'duplex') {
+    price_printing_mode_used = printType === 'color' ? price_color_duplex_used : price_bw_duplex_used;
+  } else {
+    price_printing_mode_used = printType === 'color' ? price_color_used : price_bw_used;
+  }
+
+  // Resolve pages-per-sheet (pps)
   let pps = parseInt(pages_per_sheet !== undefined && pages_per_sheet !== null ? pages_per_sheet : pagesPerSheet);
   if (!pps || isNaN(pps) || pps < 1) {
     pps = 1;
   }
 
-  const printedSheets = Math.ceil((pages || 0) / pps);
+  const numPages = parseInt(pages) || 0;
+  const effectivePages = Math.ceil(numPages / pps);
+  const printedSheets = resolvedSides === 'duplex' ? Math.ceil(effectivePages / 2) : effectivePages;
   const numCopies = parseInt(copies) || 1;
-  const printCost = printedSheets * numCopies * pricePerPage;
+
+  const printCost = effectivePages * numCopies * price_printing_mode_used;
 
   // Resolve binding/finishing option type
   let resolvedBindingType = (binding_type || 'none').toLowerCase();
   if (resolvedBindingType === 'none' && (binding === 'true' || binding === true)) {
-    // Check if we can parse the type from notes for backward compatibility
     if (notes) {
       const match = notes.match(/Binding:\s*(\w+)/i);
       if (match) {
         resolvedBindingType = match[1].toLowerCase();
       } else {
-        resolvedBindingType = 'spiral'; // fallback
+        resolvedBindingType = 'spiral';
       }
     } else {
-      resolvedBindingType = 'spiral'; // fallback
+      resolvedBindingType = 'spiral';
     }
   }
 
   const finishingPrice = getFinishingPrice(resolvedBindingType, shop);
-  // Finishing/binding charge is applied once per order (not multiplied by copies)
   const bindingCost = finishingPrice;
 
-  // Snapshot prices used
-  const price_bw_used = shop && shop.price_bw !== undefined ? parseFloat(shop.price_bw) : 2.00;
-  const price_color_used = shop && shop.price_color !== undefined ? parseFloat(shop.price_color) : 5.00;
-  const price_binding_used = shop && shop.price_binding !== undefined ? parseFloat(shop.price_binding) : 30.00;
-  const price_stick_file_used = shop && shop.price_stick_file !== undefined ? parseFloat(shop.price_stick_file) : 10.00;
-
   return {
+    print_sides: resolvedSides,
     printedSheets,
     pages_per_sheet: pps,
     printCost: parseFloat(printCost.toFixed(2)),
@@ -122,6 +142,9 @@ const calculatePrice = ({ pages, copies, printType, layout, binding, binding_typ
     total: parseFloat((printCost + bindingCost).toFixed(2)),
     price_bw_used,
     price_color_used,
+    price_bw_duplex_used,
+    price_color_duplex_used,
+    price_printing_mode_used,
     price_binding_used,
     price_stick_file_used
   };
