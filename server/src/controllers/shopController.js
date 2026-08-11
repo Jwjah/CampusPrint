@@ -9,7 +9,7 @@ const sseClients = {};
 // POST /api/shops — Register a new shop
 exports.createShop = async (req, res) => {
   try {
-    const { shop_name, description, location, price_bw, price_color, price_binding, price_stick_file } = req.body;
+    const { shop_name, description, location, price_bw, price_color, price_binding, price_stick_file, supports_duplex_printing, price_bw_duplex, price_color_duplex } = req.body;
 
     if (!shop_name) {
       return res.status(400).json({ error: 'Shop name is required' });
@@ -19,6 +19,8 @@ exports.createShop = async (req, res) => {
     const pco = parseFloat(price_color);
     const pbi = parseFloat(price_binding);
     const pst = parseFloat(price_stick_file);
+    const pbwDup = parseFloat(price_bw_duplex);
+    const pcoDup = parseFloat(price_color_duplex);
 
     if (price_bw !== undefined && !isNaN(pbw) && (pbw < 0 || pbw > 50)) {
       return res.status(400).json({ error: 'B&W print price must be between ₹0 and ₹50' });
@@ -32,15 +34,27 @@ exports.createShop = async (req, res) => {
     if (price_stick_file !== undefined && !isNaN(pst) && (pst < 0 || pst > 500)) {
       return res.status(400).json({ error: 'Stick file price must be between ₹0 and ₹500' });
     }
+    if (price_bw_duplex !== undefined && !isNaN(pbwDup) && (pbwDup < 0 || pbwDup > 50)) {
+      return res.status(400).json({ error: 'B&W duplex price must be between ₹0 and ₹50' });
+    }
+    if (price_color_duplex !== undefined && !isNaN(pcoDup) && (pcoDup < 0 || pcoDup > 200)) {
+      return res.status(400).json({ error: 'Color duplex price must be between ₹0 and ₹200' });
+    }
 
     const [existing] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [req.user.id]);
     if (existing.length) {
       return res.status(409).json({ error: 'You already have a registered shop' });
     }
 
+    const dupSupported = (supports_duplex_printing === true || supports_duplex_printing === 'true' || supports_duplex_printing === 1 || supports_duplex_printing === '1') ? 1 : 0;
+
     const [result] = await db.execute(
-      'INSERT INTO shops (user_id, shop_name, description, location, price_bw, price_color, price_binding, price_stick_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.user.id, shop_name, description || null, location || null, price_bw || 2.00, price_color || 5.00, price_binding || 30.00, price_stick_file || 10.00]
+      'INSERT INTO shops (user_id, shop_name, description, location, price_bw, price_color, price_binding, price_stick_file, supports_duplex_printing, price_bw_duplex, price_color_duplex) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        req.user.id, shop_name, description || null, location || null,
+        price_bw || 2.00, price_color || 5.00, price_binding || 30.00, price_stick_file || 10.00,
+        dupSupported, price_bw_duplex || 1.50, price_color_duplex || 4.00
+      ]
     );
 
     // Notify admins
@@ -161,11 +175,13 @@ exports.getShopStats = async (req, res) => {
 // PATCH /api/shops/pricing — Update shop pricing
 exports.updatePricing = async (req, res) => {
   try {
-    const { price_bw, price_color, price_binding, price_stick_file } = req.body;
+    const { price_bw, price_color, price_binding, price_stick_file, supports_duplex_printing, price_bw_duplex, price_color_duplex } = req.body;
     const pbw = parseFloat(price_bw);
     const pco = parseFloat(price_color);
     const pbi = parseFloat(price_binding);
     const pst = parseFloat(price_stick_file);
+    const pbwDup = parseFloat(price_bw_duplex);
+    const pcoDup = parseFloat(price_color_duplex);
 
     if (price_bw !== undefined && !isNaN(pbw) && (pbw < 0 || pbw > 50)) {
       return res.status(400).json({ error: 'B&W print price must be between ₹0 and ₹50' });
@@ -179,9 +195,35 @@ exports.updatePricing = async (req, res) => {
     if (price_stick_file !== undefined && !isNaN(pst) && (pst < 0 || pst > 500)) {
       return res.status(400).json({ error: 'Stick file price must be between ₹0 and ₹500' });
     }
+    if (price_bw_duplex !== undefined && !isNaN(pbwDup) && (pbwDup < 0 || pbwDup > 50)) {
+      return res.status(400).json({ error: 'B&W duplex price must be between ₹0 and ₹50' });
+    }
+    if (price_color_duplex !== undefined && !isNaN(pcoDup) && (pcoDup < 0 || pcoDup > 200)) {
+      return res.status(400).json({ error: 'Color duplex price must be between ₹0 and ₹200' });
+    }
+
+    const [shops] = await db.execute('SELECT * FROM shops WHERE user_id = ?', [req.user.id]);
+    if (!shops.length) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+    const currentShop = shops[0];
+
+    const dupSupported = supports_duplex_printing !== undefined
+      ? ((supports_duplex_printing === true || supports_duplex_printing === 'true' || supports_duplex_printing === 1 || supports_duplex_printing === '1') ? 1 : 0)
+      : (currentShop.supports_duplex_printing ? 1 : 0);
+
     await db.execute(
-      'UPDATE shops SET price_bw = ?, price_color = ?, price_binding = ?, price_stick_file = ? WHERE user_id = ?',
-      [price_bw || 2.00, price_color || 5.00, price_binding || 30.00, price_stick_file || 10.00, req.user.id]
+      'UPDATE shops SET price_bw = ?, price_color = ?, price_binding = ?, price_stick_file = ?, supports_duplex_printing = ?, price_bw_duplex = ?, price_color_duplex = ? WHERE user_id = ?',
+      [
+        price_bw !== undefined ? price_bw : currentShop.price_bw,
+        price_color !== undefined ? price_color : currentShop.price_color,
+        price_binding !== undefined ? price_binding : currentShop.price_binding,
+        price_stick_file !== undefined ? price_stick_file : currentShop.price_stick_file,
+        dupSupported,
+        price_bw_duplex !== undefined ? price_bw_duplex : currentShop.price_bw_duplex,
+        price_color_duplex !== undefined ? price_color_duplex : currentShop.price_color_duplex,
+        req.user.id
+      ]
     );
     res.json({ message: 'Pricing updated' });
   } catch (err) {
@@ -193,11 +235,13 @@ exports.updatePricing = async (req, res) => {
 // PUT /api/shops/:id — Update shop details
 exports.updateShop = async (req, res) => {
   try {
-    const { shop_name, description, location, price_bw, price_color, price_binding, price_stick_file } = req.body;
+    const { shop_name, description, location, price_bw, price_color, price_binding, price_stick_file, supports_duplex_printing, price_bw_duplex, price_color_duplex } = req.body;
     const pbw = parseFloat(price_bw);
     const pco = parseFloat(price_color);
     const pbi = parseFloat(price_binding);
     const pst = parseFloat(price_stick_file);
+    const pbwDup = parseFloat(price_bw_duplex);
+    const pcoDup = parseFloat(price_color_duplex);
 
     if (price_bw !== undefined && !isNaN(pbw) && (pbw < 0 || pbw > 50)) {
       return res.status(400).json({ error: 'B&W print price must be between ₹0 and ₹50' });
@@ -211,9 +255,39 @@ exports.updateShop = async (req, res) => {
     if (price_stick_file !== undefined && !isNaN(pst) && (pst < 0 || pst > 500)) {
       return res.status(400).json({ error: 'Stick file price must be between ₹0 and ₹500' });
     }
+    if (price_bw_duplex !== undefined && !isNaN(pbwDup) && (pbwDup < 0 || pbwDup > 50)) {
+      return res.status(400).json({ error: 'B&W duplex price must be between ₹0 and ₹50' });
+    }
+    if (price_color_duplex !== undefined && !isNaN(pcoDup) && (pcoDup < 0 || pcoDup > 200)) {
+      return res.status(400).json({ error: 'Color duplex price must be between ₹0 and ₹200' });
+    }
+
+    const [shops] = await db.execute('SELECT * FROM shops WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (!shops.length) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+    const currentShop = shops[0];
+
+    const dupSupported = supports_duplex_printing !== undefined
+      ? ((supports_duplex_printing === true || supports_duplex_printing === 'true' || supports_duplex_printing === 1 || supports_duplex_printing === '1') ? 1 : 0)
+      : (currentShop.supports_duplex_printing ? 1 : 0);
+
     await db.execute(
-      'UPDATE shops SET shop_name = ?, description = ?, location = ?, price_bw = ?, price_color = ?, price_binding = ?, price_stick_file = ? WHERE id = ? AND user_id = ?',
-      [shop_name, description || null, location || null, price_bw || 2.0, price_color || 5.0, price_binding || 30.0, price_stick_file || 10.0, req.params.id, req.user.id]
+      'UPDATE shops SET shop_name = ?, description = ?, location = ?, price_bw = ?, price_color = ?, price_binding = ?, price_stick_file = ?, supports_duplex_printing = ?, price_bw_duplex = ?, price_color_duplex = ? WHERE id = ? AND user_id = ?',
+      [
+        shop_name || currentShop.shop_name,
+        description !== undefined ? description : currentShop.description,
+        location !== undefined ? location : currentShop.location,
+        price_bw !== undefined ? price_bw : currentShop.price_bw,
+        price_color !== undefined ? price_color : currentShop.price_color,
+        price_binding !== undefined ? price_binding : currentShop.price_binding,
+        price_stick_file !== undefined ? price_stick_file : currentShop.price_stick_file,
+        dupSupported,
+        price_bw_duplex !== undefined ? price_bw_duplex : currentShop.price_bw_duplex,
+        price_color_duplex !== undefined ? price_color_duplex : currentShop.price_color_duplex,
+        req.params.id,
+        req.user.id
+      ]
     );
     res.json({ message: 'Shop settings updated successfully' });
   } catch (err) {
@@ -276,6 +350,11 @@ exports.triggerPrint = async (req, res) => {
         if (match) orientation = match[1].toLowerCase();
       }
 
+      // Resolve duplex layout flag: pass 'double' ONLY when order requires duplex AND shop supports duplex
+      const isOrderDuplex = (order.print_sides === 'duplex' || order.layout === 'double' || order.layout === 'duplex');
+      const shopSupportsDuplex = shops[0].supports_duplex_printing ? true : false;
+      const resolvedJobLayout = (isOrderDuplex && shopSupportsDuplex) ? 'double' : (order.layout || 'single');
+
       const sseDispatchedAt = Date.now();
       const job = {
         orderId,
@@ -284,7 +363,7 @@ exports.triggerPrint = async (req, res) => {
         fileUrl: `${baseUrl}/orders/files/${file.id}/print-pdf`,
         copies: order.copies || 1,
         printType: order.print_type || 'bw',
-        layout: order.layout || 'single',
+        layout: resolvedJobLayout,
         orientation,
         printTrace: {
           studentClickAt,

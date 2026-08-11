@@ -438,7 +438,7 @@ class FooterRenderer {
  * on the last page. All positions and scaling are derived dynamically from the printer profile.
  * Supports 1-up, 2-up (vertical stack), and 4-up (2x2 grid) formatting in a single pass.
  */
-async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw', pagesPerSheet = 1, orderIdStr = null, orientation = 'portrait', pickupCode = null, deliveryCode = null) {
+async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw', pagesPerSheet = 1, orderIdStr = null, orientation = 'portrait', pickupCode = null, deliveryCode = null, renderFooter = false) {
   try {
     const srcDoc = await PDFDocument.load(pdfBuffer);
     const srcPages = srcDoc.getPages();
@@ -461,13 +461,13 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
     const pageWidth = orientation === 'landscape' ? A4_HEIGHT : A4_WIDTH;
     const pageHeight = orientation === 'landscape' ? A4_WIDTH : A4_HEIGHT;
     
-    console.log(`[PDF PROCESSOR] Starting conversion: ${orientation} output, ${pagesPerSheet} pages per sheet, total sheets: ${numSheets}`);
+    console.log(`[PDF PROCESSOR] Starting conversion: ${orientation} output, ${pagesPerSheet} pages per sheet, total sheets: ${numSheets}, renderFooter: ${renderFooter}`);
     
     for (let s = 0; s < numSheets; s++) {
       const newPage = pdfDoc.addPage([pageWidth, pageHeight]);
       const isLastSheet = (s === numSheets - 1);
       
-      const bottomReserve = isLastSheet ? RESERVED_SPACE : 0;
+      const bottomReserve = (isLastSheet && renderFooter) ? RESERVED_SPACE : 0;
       const availableHeight = pageHeight - bottomReserve;
       
       if (pagesPerSheet === 1) {
@@ -499,26 +499,11 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
           width: drawW,
           height: drawH,
         });
-        
-        if (isLastSheet) {
-          console.log(`[PDF PROCESSOR LOG] Page Conversion - Sheet #${s + 1} (Last Page):`);
-          console.log(`  - Original Page size: ${originalWidth.toFixed(2)} x ${originalHeight.toFixed(2)} pt (${detectedPaper})`);
-          console.log(`  - New Page size: ${pageWidth.toFixed(2)} x ${pageHeight.toFixed(2)} pt`);
-          console.log(`  - Footer Y Coordinate (Bottom Y): ${FOOTER_BOTTOM_Y.toFixed(2)} pt (${(FOOTER_BOTTOM_Y / MM_TO_PT).toFixed(2)} mm)`);
-          console.log(`  - Remaining bottom whitespace: ${(FOOTER_BOTTOM_Y / MM_TO_PT).toFixed(2)} mm`);
-        } else {
-          console.log(`[PDF PROCESSOR LOG] Page Conversion - Sheet #${s + 1}:`);
-          console.log(`  - Original Page size: ${originalWidth.toFixed(2)} x ${originalHeight.toFixed(2)} pt (${detectedPaper})`);
-          console.log(`  - New Page size: ${pageWidth.toFixed(2)} x ${pageHeight.toFixed(2)} pt`);
-        }
       } else if (pagesPerSheet === 2) {
-        // 2-up: Side-by-side if landscape, stacked vertically if portrait
+        // 2-up layout
         let isVerticalStack = orientation === 'portrait';
-        
         const slotWidth = isVerticalStack ? pageWidth : pageWidth / 2;
         const slotHeight = isVerticalStack ? availableHeight / 2 : availableHeight;
-        
-        console.log(`[PDF PROCESSOR LOG] Sheet #${s + 1} (2-up): slotWidth: ${slotWidth.toFixed(2)}, slotHeight: ${slotHeight.toFixed(2)}`);
         
         const drawSlot2Up = async (pageIdx, slotX, slotY) => {
           if (pageIdx < numPages) {
@@ -544,22 +529,16 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
         };
         
         if (isVerticalStack) {
-          // Bottom slot (Page s*2 + 1)
           await drawSlot2Up(s * 2 + 1, 0, bottomReserve);
-          // Top slot (Page s*2)
           await drawSlot2Up(s * 2, 0, bottomReserve + slotHeight);
         } else {
-          // Left slot (Page s*2)
           await drawSlot2Up(s * 2, 0, bottomReserve);
-          // Right slot (Page s*2 + 1)
           await drawSlot2Up(s * 2 + 1, slotWidth, bottomReserve);
         }
       } else if (pagesPerSheet === 4) {
-        // 4-up: 2x2 grid
+        // 4-up grid
         const slotWidth = pageWidth / 2;
         const slotHeight = availableHeight / 2;
-        
-        console.log(`[PDF PROCESSOR LOG] Sheet #${s + 1} (4-up): slotWidth: ${slotWidth.toFixed(2)}, slotHeight: ${slotHeight.toFixed(2)}`);
         
         const drawSlot4Up = async (pageIdx, slotX, slotY) => {
           if (pageIdx < numPages) {
@@ -584,35 +563,33 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
           }
         };
         
-        // Bottom-Left (Slot 3)
         await drawSlot4Up(s * 4 + 2, 0, bottomReserve);
-        // Bottom-Right (Slot 4)
         await drawSlot4Up(s * 4 + 3, slotWidth, bottomReserve);
-        // Top-Left (Slot 1)
         await drawSlot4Up(s * 4, 0, bottomReserve + slotHeight);
-        // Top-Right (Slot 2)
         await drawSlot4Up(s * 4 + 1, slotWidth, bottomReserve + slotHeight);
       }
     }
     
-    // Render the brand footer on the last A4 page
-    const pages = pdfDoc.getPages();
-    const lastPage = pages[pages.length - 1];
-    
-    const renderer = new FooterRenderer(
-      lastPage,
-      pdfDoc,
-      orderHash,
-      orderId,
-      pickupQrBase64,
-      deliveryQrBase64,
-      printType,
-      orderIdStr,
-      pickupCode,
-      deliveryCode
-    );
-    await renderer.loadFonts();
-    await renderer.render();
+    // Only render brand footer if explicitly requested
+    if (renderFooter) {
+      const pages = pdfDoc.getPages();
+      const lastPage = pages[pages.length - 1];
+      
+      const renderer = new FooterRenderer(
+        lastPage,
+        pdfDoc,
+        orderHash,
+        orderId,
+        pickupQrBase64,
+        deliveryQrBase64,
+        printType,
+        orderIdStr,
+        pickupCode,
+        deliveryCode
+      );
+      await renderer.loadFonts();
+      await renderer.render();
+    }
     
     const modifiedBytes = await pdfDoc.save();
     return Buffer.from(modifiedBytes);

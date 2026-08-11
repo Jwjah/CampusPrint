@@ -76,23 +76,44 @@ export default function ShopSettingsPage() {
           </div>
         </div>
 
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Printer Capabilities</h3>
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+            <input 
+              type="checkbox" 
+              checked={!!shop.supports_duplex_printing} 
+              onChange={e => setShop({ ...shop, supports_duplex_printing: e.target.checked })} 
+              style={{ width: 18, height: 18 }} 
+            />
+            <span>Duplex Printing: My printer supports double-sided printing</span>
+          </label>
+        </div>
+
         <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Pricing</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
           <div className="input-group">
-            <label>B&W (₹/page)</label>
-            <input className="input" type="number" step="0.5" value={shop.price_bw} onChange={e => setShop({...shop, price_bw: e.target.value})} required />
+            <label>B&W Single-sided (₹/page)</label>
+            <input className="input" type="number" step="0.5" value={shop.price_bw || ''} onChange={e => setShop({...shop, price_bw: e.target.value})} required />
           </div>
           <div className="input-group">
-            <label>Color (₹/page)</label>
-            <input className="input" type="number" step="0.5" value={shop.price_color} onChange={e => setShop({...shop, price_color: e.target.value})} required />
+            <label>Color Single-sided (₹/page)</label>
+            <input className="input" type="number" step="0.5" value={shop.price_color || ''} onChange={e => setShop({...shop, price_color: e.target.value})} required />
+          </div>
+          <div className="input-group">
+            <label>B&W Double-sided (₹/page)</label>
+            <input className="input" type="number" step="0.5" value={shop.price_bw_duplex !== undefined ? shop.price_bw_duplex : 1.50} onChange={e => setShop({...shop, price_bw_duplex: e.target.value})} required />
+          </div>
+          <div className="input-group">
+            <label>Color Double-sided (₹/page)</label>
+            <input className="input" type="number" step="0.5" value={shop.price_color_duplex !== undefined ? shop.price_color_duplex : 4.00} onChange={e => setShop({...shop, price_color_duplex: e.target.value})} required />
           </div>
           <div className="input-group">
             <label>Spiral Binding (₹)</label>
-            <input className="input" type="number" step="1" value={shop.price_binding} onChange={e => setShop({...shop, price_binding: e.target.value})} required />
+            <input className="input" type="number" step="1" value={shop.price_binding || ''} onChange={e => setShop({...shop, price_binding: e.target.value})} required />
           </div>
           <div className="input-group">
             <label>Stick File (₹)</label>
-            <input className="input" type="number" step="1" value={shop.price_stick_file} onChange={e => setShop({...shop, price_stick_file: e.target.value})} required />
+            <input className="input" type="number" step="1" value={shop.price_stick_file || ''} onChange={e => setShop({...shop, price_stick_file: e.target.value})} required />
           </div>
         </div>
 

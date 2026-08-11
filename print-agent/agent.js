@@ -193,11 +193,12 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single', or
   fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ${logMsg}\n`);
 
   const isWindows = process.platform === 'win32';
+  const isDuplex = layout === 'double' || layout === 'duplex';
   let printCmd;
 
   if (isWindows) {
     const exePath = path.join(__dirname, 'SumatraPDF.exe');
-    const settingsStr = `${printType === 'bw' ? 'monochrome' : 'color'},${layout === 'double' ? 'duplex' : 'simplex'},${copies}x,${orientation}`;
+    const settingsStr = `${printType === 'bw' ? 'monochrome' : 'color'},${isDuplex ? 'duplex' : 'simplex'},${copies}x,${orientation}`;
 
     if (fs.existsSync(exePath)) {
       printCmd = `"${exePath}" -print-to-default -print-settings "${settingsStr}" -silent "${filePath}"`;
@@ -209,7 +210,7 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single', or
     const colorOpt = printType === 'bw' 
       ? '-o ColorModel=Gray -o ColorModel=Monochrome -o ColorModel=BlackWhite -o ColorModel=K' 
       : '-o ColorModel=Color';
-    const duplexOpt = layout === 'double' ? '-o sides=two-sided-long-edge' : '-o sides=one-sided';
+    const duplexOpt = isDuplex ? '-o sides=two-sided-long-edge' : '-o sides=one-sided';
     const orientationOpt = orientation === 'landscape' ? '-o landscape' : '-o portrait';
     printCmd = `lp -n ${copies} ${colorOpt} ${duplexOpt} ${orientationOpt} "${filePath}"`;
   }

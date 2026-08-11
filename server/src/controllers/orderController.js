@@ -101,12 +101,21 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ error: 'Invalid binding option' });
     }
 
+    // Resolve print_sides & validate shop capability
+    const rawSides = req.body.print_sides || req.body.printSides;
+    const requestedSides = (rawSides ? (String(rawSides).toLowerCase() === 'duplex' ? 'duplex' : 'single') : (layout === 'double' || layout === 'duplex' ? 'duplex' : 'single'));
+
+    if (requestedSides === 'duplex' && !shop.supports_duplex_printing) {
+      return res.status(400).json({ error: 'Double-sided printing is not supported by this shop.' });
+    }
+
     // Calculate price
     const pricing = calculatePrice({
       pages: totalPages,
       copies: parseInt(copies) || 1,
       printType: print_type || 'bw',
       layout: layout || 'single',
+      print_sides: requestedSides,
       binding: binding === 'true' || binding === true,
       binding_type: bindingType,
       pages_per_sheet: req.body.pages_per_sheet || req.body.pagesPerSheet,
@@ -126,8 +135,8 @@ exports.createOrder = async (req, res) => {
 
     // Create order
     const [result] = await db.execute(
-      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used, pickup_code, delivery_code, pages_per_sheet) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used, pickup_code, delivery_code, pages_per_sheet, print_sides, price_bw_duplex_used, price_color_duplex_used, price_printing_mode_used) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         orderHash, req.user.id, shop_id,
         print_type || 'bw', layout || 'single', parseInt(copies) || 1,
@@ -139,7 +148,11 @@ exports.createOrder = async (req, res) => {
         pricing.price_bw_used, pricing.price_color_used,
         pricing.price_binding_used, pricing.price_stick_file_used,
         pickupCode, deliveryCode,
-        pricing.pages_per_sheet || 1
+        pricing.pages_per_sheet || 1,
+        pricing.print_sides,
+        pricing.price_bw_duplex_used,
+        pricing.price_color_duplex_used,
+        pricing.price_printing_mode_used
       ]
     );
 
@@ -441,6 +454,101 @@ exports.updateOrderStatus = async (req, res) => {
   } catch (err) {
     console.error('Update status error:', err);
     res.status(500).json({ error: 'Failed to update status' });
+  }
+};
+
+// POST /api/orders/:id/shop-deliver — Shop marks a self-pickup order as delivered
+exports.shopDeliverOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+
+    // Fetch shop details for authenticated user
+    let shopId = null;
+    if (req.user.role === 'shop') {
+      const [shops] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [req.user.id]);
+      if (!shops.length) {
+        return res.status(403).json({ error: 'Shop profile not found for this user' });
+      }
+      shopId = shops[0].id;
+    }
+
+    // Fetch order details
+    const [orders] = await db.execute('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (!orders.length) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const order = orders[0];
+
+    // Authorization & validation checks
+    if (req.user.role === 'shop' && order.shop_id !== shopId) {
+      return res.status(403).json({ error: 'Unauthorized to deliver an order belonging to another shop' });
+    }
+
+    if (order.delivery_type !== 'pickup' && order.delivery_type !== 'self_pickup') {
+      return res.status(400).json({ error: 'This order is for hostel delivery, not self-pickup' });
+    }
+
+    if (order.status === 'delivered') {
+      return res.status(400).json({ error: 'Order is already delivered' });
+    }
+
+    if (order.status !== 'ready') {
+      return res.status(400).json({ error: `Cannot deliver order in '${order.status}' status. Order must be marked as READY first.` });
+    }
+
+    // Atomic transaction using optimistic locking on order status, shop identity, and pickup delivery type
+    await db.transaction(async (conn) => {
+      const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const [updateResult] = await conn.execute(
+        `UPDATE orders SET status = 'delivered', delivered_at = ?, pickup_verified_by = ?, pickup_verified_at = ? 
+         WHERE id = ? AND shop_id = ? AND status = 'ready' AND delivery_type IN ('pickup', 'self_pickup')`,
+        [nowStr, req.user.id, nowStr, orderId, order.shop_id]
+      );
+
+      if (updateResult.affectedRows === 0) {
+        throw new Error('ALREADY_PROCESSED');
+      }
+
+      // Credit shop wallet inside transaction safely
+      const [shopRows] = await conn.execute('SELECT * FROM shops WHERE id = ?', [order.shop_id]);
+      if (shopRows.length) {
+        const s = shopRows[0];
+        const netCredit = parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0);
+        const newBalance = parseFloat(s.wallet_balance) + netCredit;
+
+        await conn.execute(
+          'UPDATE shops SET wallet_balance = ?, total_orders = total_orders + 1 WHERE id = ?',
+          [newBalance, order.shop_id]
+        );
+
+        await conn.execute(
+          'INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)',
+          [s.user_id, 'credit', netCredit, `Self-Pickup Order #${order.order_hash.substring(0, 8).toUpperCase()}`, order.order_hash, newBalance]
+        );
+      }
+    });
+
+    // Notify student outside transaction
+    try {
+      await db.execute(
+        'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
+        [order.student_id, '🎉 Order Picked Up!', `Your order #${order.order_hash.substring(0, 8).toUpperCase()} has been collected. Thank you!`, 'order']
+      );
+      await sendPushToUser(order.student_id, {
+        title: '🎉 Order Picked Up!',
+        message: `Your order #${order.order_hash.substring(0, 8).toUpperCase()} has been collected. Thank you!`,
+        url: `/student/orders/${order.id}`,
+        tag: `order-${order.id}`,
+      });
+    } catch (e) {}
+
+    res.json({ message: 'Order marked as delivered successfully', status: 'delivered' });
+  } catch (err) {
+    if (err.message === 'ALREADY_PROCESSED') {
+      return res.status(400).json({ error: 'Order already delivered or invalid state' });
+    }
+    console.error('Shop deliver order error:', err);
+    res.status(500).json({ error: 'Failed to mark order as delivered' });
   }
 };
 
@@ -881,29 +989,13 @@ exports.downloadPrintPdf = async (req, res) => {
       }
     }
     
-    // If not a PDF, send directly
-    if (file.mime_type !== 'application/pdf') {
-      res.contentType(file.mime_type);
+    // If not a PDF or standard 1 page/sheet layout, send original PDF buffer directly to physical printer
+    if (file.mime_type !== 'application/pdf' || pagesPerSheet === 1) {
+      res.contentType(file.mime_type || 'application/pdf');
       return res.send(pdfBuffer);
     }
     
-    // Parse pages per sheet and orientation from notes format: e.g. "[Format: A4, portrait, 2 pg/sheet, Binding: none]"
-    let pagesPerSheet = 1;
-    let orientation = 'portrait';
-    if (file.notes) {
-      if (file.notes.includes('pg/sheet')) {
-        const match = file.notes.match(/(\d+)\s*pg\/sheet/);
-        if (match) {
-          pagesPerSheet = parseInt(match[1], 10);
-        }
-      }
-      const matchOri = file.notes.match(/\[Format:.*?, (portrait|landscape),/i);
-      if (matchOri) {
-        orientation = matchOri[1].toLowerCase();
-      }
-    }
-    
-    // Modify PDF using helper
+    // For multi-page per sheet (2-up, 4-up), arrange layout without adding any brand footers/QRs
     const { modifyPdf } = require('../utils/pdfProcessor');
     let modifiedBuffer;
     try {
@@ -918,11 +1010,12 @@ exports.downloadPrintPdf = async (req, res) => {
         file.order_id,
         orientation,
         file.pickup_code,
-        file.delivery_code
+        file.delivery_code,
+        false // renderFooter = false (no branding/QR printed on paper)
       );
     } catch (processErr) {
-      console.error('PDF modifications failed, sending original:', processErr.message);
-      modifiedBuffer = pdfBuffer; // fallback to original on failure
+      console.error('PDF layout processing failed, sending original:', processErr.message);
+      modifiedBuffer = pdfBuffer;
     }
     
     res.contentType('application/pdf');

@@ -47,6 +47,9 @@ const migrate = async () => {
       price_color REAL DEFAULT 5.00,
       price_binding REAL DEFAULT 30.00,
       price_stick_file REAL DEFAULT 10.00,
+      supports_duplex_printing INTEGER DEFAULT 0,
+      price_bw_duplex REAL DEFAULT 1.50,
+      price_color_duplex REAL DEFAULT 4.00,
       rating REAL DEFAULT 0.00,
       total_orders INTEGER DEFAULT 0,
       wallet_balance REAL DEFAULT 0.00,
@@ -86,6 +89,10 @@ const migrate = async () => {
       price_color_used REAL DEFAULT 5.00,
       price_binding_used REAL DEFAULT 30.00,
       price_stick_file_used REAL DEFAULT 10.00,
+      print_sides TEXT DEFAULT 'single',
+      price_bw_duplex_used REAL DEFAULT 1.50,
+      price_color_duplex_used REAL DEFAULT 4.00,
+      price_printing_mode_used REAL DEFAULT 2.00,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -742,6 +749,9 @@ const migrate = async () => {
       price_color DECIMAL(10,2) DEFAULT 5.00,
       price_binding DECIMAL(10,2) DEFAULT 30.00,
       price_stick_file DECIMAL(10,2) DEFAULT 10.00,
+      supports_duplex_printing TINYINT(1) DEFAULT 0,
+      price_bw_duplex DECIMAL(10,2) DEFAULT 1.50,
+      price_color_duplex DECIMAL(10,2) DEFAULT 4.00,
       rating DECIMAL(3,2) DEFAULT 0.00,
       total_orders INT DEFAULT 0,
       wallet_balance DECIMAL(12,2) DEFAULT 0.00,
@@ -782,6 +792,10 @@ const migrate = async () => {
       price_color_used DECIMAL(10,2) DEFAULT 5.00,
       price_binding_used DECIMAL(10,2) DEFAULT 30.00,
       price_stick_file_used DECIMAL(10,2) DEFAULT 10.00,
+      print_sides VARCHAR(20) DEFAULT 'single',
+      price_bw_duplex_used DECIMAL(10,2) DEFAULT 1.50,
+      price_color_duplex_used DECIMAL(10,2) DEFAULT 4.00,
+      price_printing_mode_used DECIMAL(10,2) DEFAULT 2.00,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (student_id) REFERENCES users(id),
@@ -1481,7 +1495,14 @@ const migrate = async () => {
     `ALTER TABLE orders MODIFY COLUMN delivery_code VARCHAR(20) DEFAULT NULL`,
     `ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0`,
     `ALTER TABLE otp_codes ADD COLUMN attempts INTEGER DEFAULT 0`,
-    `ALTER TABLE orders ADD COLUMN pages_per_sheet INTEGER DEFAULT 1`
+    `ALTER TABLE orders ADD COLUMN pages_per_sheet INTEGER DEFAULT 1`,
+    `ALTER TABLE shops ADD COLUMN supports_duplex_printing INTEGER DEFAULT 0`,
+    `ALTER TABLE shops ADD COLUMN price_bw_duplex DECIMAL(10,2) DEFAULT 1.50`,
+    `ALTER TABLE shops ADD COLUMN price_color_duplex DECIMAL(10,2) DEFAULT 4.00`,
+    `ALTER TABLE orders ADD COLUMN print_sides VARCHAR(20) DEFAULT 'single'`,
+    `ALTER TABLE orders ADD COLUMN price_bw_duplex_used DECIMAL(10,2) DEFAULT 1.50`,
+    `ALTER TABLE orders ADD COLUMN price_color_duplex_used DECIMAL(10,2) DEFAULT 4.00`,
+    `ALTER TABLE orders ADD COLUMN price_printing_mode_used DECIMAL(10,2) DEFAULT 2.00`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { console.warn('Alter table warning:', e.message); } // Ignore if column already exists or command unsupported

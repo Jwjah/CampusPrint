@@ -227,14 +227,15 @@ exports.verifyDelivery = async (req, res) => {
       return res.status(400).json({ error: 'Order is not in out_for_delivery state or not assigned to you.' });
     }
 
+    const suppliedCode = (code || '').trim();
     // Wrap in a transaction to prevent double-credit race conditions.
-    // The WHERE clause on status='out_for_delivery' acts as an optimistic lock.
+    // The WHERE clause on status, agent_id, and delivery_code acts as an optimistic lock.
     let earning = 0;
     await db.transaction(async (conn) => {
-      // Atomic status transition — if another request already changed the status, affectedRows = 0
+      // Atomic status transition — if code is wrong or order state changed, affectedRows = 0
       const [updateResult] = await conn.execute(
-        "UPDATE orders SET status = 'delivered', delivery_code = NULL, delivery_verified_by = ?, delivery_verified_at = CURRENT_TIMESTAMP, delivered_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'out_for_delivery'",
-        [req.user.id, orderId]
+        "UPDATE orders SET status = 'delivered', delivery_code = NULL, delivery_verified_by = ?, delivery_verified_at = CURRENT_TIMESTAMP, delivered_at = CURRENT_TIMESTAMP WHERE id = ? AND agent_id = ? AND status = 'out_for_delivery' AND (delivery_code = ? OR UPPER(delivery_code) = UPPER(?))",
+        [req.user.id, orderId, req.user.id, suppliedCode, suppliedCode]
       );
 
       if (updateResult.affectedRows === 0) {
