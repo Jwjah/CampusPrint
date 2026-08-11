@@ -231,13 +231,17 @@ export default function QueuePage() {
                     </div>
                   )}
 
-                  {/* Middle: Large First-Page Document Preview */}
+                  {/* Middle: Large First-Page Document Preview (Single or Multi-PDF Slider) */}
                   {order.files && order.files.length > 0 && (
                     <div>
-                      <LargeDocumentPreview 
-                        filePath={order.files[0].file_path || order.files[0].path} 
-                        fileName={order.files[0].name || order.files[0].original_name} 
-                      />
+                      {order.files.length === 1 ? (
+                        <LargeDocumentPreview 
+                          filePath={order.files[0].file_path || order.files[0].path} 
+                          fileName={order.files[0].name || order.files[0].original_name} 
+                        />
+                      ) : (
+                        <MultiDocumentPreviewSlider files={order.files} />
+                      )}
                     </div>
                   )}
 
@@ -484,6 +488,188 @@ function LargeDocumentPreview({ filePath, fileName }: { filePath: string; fileNa
           background: '#ffffff',
         }}
       />
+    </div>
+  );
+}
+
+function MultiDocumentPreviewSlider({ files }: { files: any[] }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const total = files.length;
+  const currentFile = files[selectedIndex] || files[0];
+
+  const handleNext = () => {
+    setSelectedIndex((prev) => (prev < total - 1 ? prev + 1 : 0));
+  };
+
+  const handlePrev = () => {
+    setSelectedIndex((prev) => (prev > 0 ? prev - 1 : total - 1));
+  };
+
+  const minSwipeDistance = 40;
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    if (isLeftSwipe) {
+      handleNext();
+    } else if (isRightSwipe) {
+      handlePrev();
+    }
+  };
+
+  return (
+    <div 
+      onTouchStart={onTouchStart} 
+      onTouchMove={onTouchMove} 
+      onTouchEnd={onTouchEnd}
+      style={{
+        width: '100%',
+        padding: '16px 14px',
+        background: 'rgba(0, 0, 0, 0.3)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: 12,
+        margin: '16px 0',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        position: 'relative',
+        userSelect: 'none',
+      }}
+    >
+      {/* Top Header: File Name + Index Counter (e.g. 1 / 4) */}
+      <div style={{
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+        padding: '0 4px',
+      }}>
+        <div style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: 'var(--text-primary)',
+          maxWidth: '70%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}>
+          <span>📄</span>
+          <span>{currentFile.name || currentFile.original_name || `Attachment #${selectedIndex + 1}`}</span>
+        </div>
+
+        <div style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: 'var(--primary-light)',
+          background: 'rgba(99, 102, 241, 0.15)',
+          border: '1px solid rgba(99, 102, 241, 0.3)',
+          padding: '2px 10px',
+          borderRadius: 12,
+        }}>
+          {selectedIndex + 1} / {total}
+        </div>
+      </div>
+
+      {/* Main Preview Container with Arrows */}
+      <div style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        minHeight: 280,
+      }}>
+        <button
+          onClick={handlePrev}
+          title="Previous PDF"
+          style={{
+            position: 'absolute',
+            left: 4,
+            zIndex: 10,
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            background: 'rgba(15, 23, 42, 0.85)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: 20,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            transition: 'all 0.2s',
+          }}
+        >
+          ‹
+        </button>
+
+        <LargeDocumentPreview 
+          key={currentFile.id || selectedIndex} 
+          filePath={currentFile.file_path || currentFile.path} 
+          fileName={currentFile.name || currentFile.original_name} 
+        />
+
+        <button
+          onClick={handleNext}
+          title="Next PDF"
+          style={{
+            position: 'absolute',
+            right: 4,
+            zIndex: 10,
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            background: 'rgba(15, 23, 42, 0.85)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: 20,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            transition: 'all 0.2s',
+          }}
+        >
+          ›
+        </button>
+      </div>
+
+      {/* Pagination Dots */}
+      {total <= 10 && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          {files.map((_, idx) => (
+            <div
+              key={idx}
+              onClick={() => setSelectedIndex(idx)}
+              style={{
+                width: selectedIndex === idx ? 18 : 6,
+                height: 6,
+                borderRadius: 3,
+                background: selectedIndex === idx ? 'var(--primary)' : 'rgba(255,255,255,0.2)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
