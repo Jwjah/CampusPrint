@@ -242,7 +242,35 @@ export default function QueuePage() {
                   )}
 
                   {/* Bottom: Action Buttons */}
-                  <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', alignItems: 'center', marginTop: 12 }}>
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+                    {order.files && order.files.map((file: any) => (
+                      <TapButton
+                        key={file.id}
+                        className="btn btn-secondary"
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          padding: '10px 18px',
+                          fontSize: 14,
+                          fontWeight: 600,
+                          borderRadius: 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                        onClick={async () => {
+                          try {
+                            const { data } = await api.get(`/orders/files/${file.id}/download`);
+                            window.open(data.url, '_blank');
+                          } catch (err) {
+                            toast.error('Failed to open file');
+                          }
+                        }}
+                      >
+                        📄 View Original {order.files.length > 1 ? `(${file.name || 'File'})` : ''}
+                      </TapButton>
+                    ))}
+
                     {order.status === 'pending' && (
                       <TapButton className="btn btn-danger btn-sm" onClick={() => updateStatus(order.id, 'cancelled')}>
                         ✕ Reject
