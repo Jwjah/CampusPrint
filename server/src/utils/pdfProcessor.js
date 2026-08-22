@@ -470,6 +470,8 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
       const bottomReserve = (isLastSheet && renderFooter) ? RESERVED_SPACE : 0;
       const availableHeight = pageHeight - bottomReserve;
       
+      const MARGIN_PADDING = 12.0; // 12 pt (~4.2mm) printable margin padding for uniform top/bottom/left/right spacing
+
       if (pagesPerSheet === 1) {
         const page = srcPages[s];
         const { width, height } = page.getSize();
@@ -483,15 +485,18 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
         
         const [embedded] = await pdfDoc.embedPages([page]);
         
-        // Scale proportionally to fit within the available bounds while maximizing size
-        const scaleX = pageWidth / originalWidth;
-        const scaleY = availableHeight / originalHeight;
+        // Scale proportionally to fit within printable bounds with uniform symmetric margins
+        const fitWidth = pageWidth - (2 * MARGIN_PADDING);
+        const fitHeight = availableHeight - (2 * MARGIN_PADDING);
+
+        const scaleX = fitWidth / originalWidth;
+        const scaleY = fitHeight / originalHeight;
         const scale = Math.min(scaleX, scaleY);
         
         const drawW = originalWidth * scale;
         const drawH = originalHeight * scale;
-        const drawX = (pageWidth - drawW) / 2;
-        const drawY = bottomReserve + (availableHeight - drawH) / 2;
+        const drawX = MARGIN_PADDING + (fitWidth - drawW) / 2;
+        const drawY = bottomReserve + MARGIN_PADDING + (fitHeight - drawH) / 2;
 
         newPage.drawPage(embedded, {
           x: drawX,
@@ -509,14 +514,16 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
           if (pageIdx < numPages) {
             const page = srcPages[pageIdx];
             const { width: srcW, height: srcH } = page.getSize();
-            const scaleX = slotWidth / srcW;
-            const scaleY = slotHeight / srcH;
+            const fitSlotWidth = slotWidth - (2 * MARGIN_PADDING);
+            const fitSlotHeight = slotHeight - (2 * MARGIN_PADDING);
+            const scaleX = fitSlotWidth / srcW;
+            const scaleY = fitSlotHeight / srcH;
             const scale = Math.min(scaleX, scaleY);
             
             const w = srcW * scale;
             const h = srcH * scale;
-            const dx = slotX + (slotWidth - w) / 2;
-            const dy = slotY + (slotHeight - h) / 2;
+            const dx = slotX + MARGIN_PADDING + (fitSlotWidth - w) / 2;
+            const dy = slotY + MARGIN_PADDING + (fitSlotHeight - h) / 2;
             
             const [embedded] = await pdfDoc.embedPages([page]);
             newPage.drawPage(embedded, {
@@ -544,14 +551,16 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
           if (pageIdx < numPages) {
             const page = srcPages[pageIdx];
             const { width: srcW, height: srcH } = page.getSize();
-            const scaleX = slotWidth / srcW;
-            const scaleY = slotHeight / srcH;
+            const fitSlotWidth = slotWidth - (2 * MARGIN_PADDING);
+            const fitSlotHeight = slotHeight - (2 * MARGIN_PADDING);
+            const scaleX = fitSlotWidth / srcW;
+            const scaleY = fitSlotHeight / srcH;
             const scale = Math.min(scaleX, scaleY);
             
             const w = srcW * scale;
             const h = srcH * scale;
-            const dx = slotX + (slotWidth - w) / 2;
-            const dy = slotY + (slotHeight - h) / 2;
+            const dx = slotX + MARGIN_PADDING + (fitSlotWidth - w) / 2;
+            const dy = slotY + MARGIN_PADDING + (fitSlotHeight - h) / 2;
             
             const [embedded] = await pdfDoc.embedPages([page]);
             newPage.drawPage(embedded, {
