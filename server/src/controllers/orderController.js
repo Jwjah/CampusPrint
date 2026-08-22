@@ -933,7 +933,7 @@ exports.downloadPrintPdf = async (req, res) => {
     
     // Fetch file details along with order details
     const [files] = await db.execute(
-      `SELECT f.*, o.order_hash, o.order_id, o.shop_id, o.pickup_qr, o.delivery_qr, o.print_type, o.notes, o.payment_status, o.status, o.pickup_code, o.delivery_code 
+      `SELECT f.*, o.order_hash, o.order_id, o.shop_id, o.pickup_qr, o.delivery_qr, o.print_type, o.notes, o.payment_status, o.status, o.pickup_code, o.delivery_code, o.pages_per_sheet 
        FROM order_files f 
        JOIN orders o ON f.order_id = o.id 
        WHERE f.id = ?`,
@@ -989,6 +989,16 @@ exports.downloadPrintPdf = async (req, res) => {
       }
     }
     
+    // Extract pagesPerSheet & orientation from order notes or database columns
+    let pagesPerSheet = file.pages_per_sheet || 1;
+    let orientation = 'portrait';
+    if (file.notes) {
+      const matchPps = file.notes.match(/\[Format:.*?(\d+)\s*(?:pg\/sheet|-up)/i);
+      if (matchPps) pagesPerSheet = parseInt(matchPps[1], 10);
+      const matchOrient = file.notes.match(/\[Format:.*?, (portrait|landscape),/i);
+      if (matchOrient) orientation = matchOrient[1].toLowerCase();
+    }
+
     // If not a PDF or standard 1 page/sheet layout, send original PDF buffer directly to physical printer
     if (file.mime_type !== 'application/pdf' || pagesPerSheet === 1) {
       res.contentType(file.mime_type || 'application/pdf');
