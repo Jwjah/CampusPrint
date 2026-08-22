@@ -75,7 +75,7 @@ async function runTests() {
     });
 
     assertEqual(pricing.printedSheets, 5, 'printedSheets for 10 pages duplex');
-    assertEqual(pricing.printCost, 15.00, 'printCost for 10 pages duplex @ 1.50');
+    assertEqual(pricing.printCost, 7.50, 'printCost for 10 pages duplex @ 1.50 (5 physical sheets)');
   });
 
   // Test 3: Concurrency protection — 2 simultaneous Mark Delivered requests

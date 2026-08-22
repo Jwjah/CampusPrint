@@ -147,7 +147,7 @@ const duplexShop = {
   price_color_duplex: 8.00,
 };
 
-test('Duplex B&W pricing: 10 pages @ ₹1.50 = ₹15.00, 5 physical sheets', () => {
+test('Duplex B&W pricing: 10 pages (5 physical sheets) @ ₹1.50 = ₹7.50', () => {
   const result = calculatePrice({
     pages: 10,
     copies: 1,
@@ -156,11 +156,11 @@ test('Duplex B&W pricing: 10 pages @ ₹1.50 = ₹15.00, 5 physical sheets', () 
     shop: duplexShop,
   });
   assertEqual(result.printedSheets, 5, 'printedSheets');
-  assertEqual(result.printCost, 15.00, 'printCost');
+  assertEqual(result.printCost, 7.50, 'printCost');
   assertEqual(result.price_printing_mode_used, 1.50, 'price_printing_mode_used');
 });
 
-test('Duplex B&W odd pages: 5 pages @ ₹1.50 = ₹7.50, 3 physical sheets', () => {
+test('Duplex B&W odd pages: 5 pages (3 physical sheets) @ ₹1.50 = ₹4.50', () => {
   const result = calculatePrice({
     pages: 5,
     copies: 1,
@@ -169,10 +169,10 @@ test('Duplex B&W odd pages: 5 pages @ ₹1.50 = ₹7.50, 3 physical sheets', () 
     shop: duplexShop,
   });
   assertEqual(result.printedSheets, 3, 'printedSheets');
-  assertEqual(result.printCost, 7.50, 'printCost');
+  assertEqual(result.printCost, 4.50, 'printCost');
 });
 
-test('Duplex Color pricing: 10 pages @ ₹8.00 = ₹80.00', () => {
+test('Duplex Color pricing: 10 pages (5 physical sheets) @ ₹8.00 = ₹40.00', () => {
   const result = calculatePrice({
     pages: 10,
     copies: 1,
@@ -181,7 +181,7 @@ test('Duplex Color pricing: 10 pages @ ₹8.00 = ₹80.00', () => {
     shop: duplexShop,
   });
   assertEqual(result.printedSheets, 5, 'printedSheets');
-  assertEqual(result.printCost, 80.00, 'printCost');
+  assertEqual(result.printCost, 40.00, 'printCost');
 });
 
 test('Odd duplex page sheet counts: 5->3, 7->4, 99->50 physical sheets', () => {
@@ -206,7 +206,7 @@ test('Finishing options pricing matrix: Staple=₹0, Spiral=₹30, Stick File=�
   assertEqual(stick.bindingCost, 10.00, 'stick file binding cost');
 });
 
-test('Multiple attachments total page pricing (10 pg + 4 pg = 14 total pages)', () => {
+test('Multiple attachments total page pricing (10 pg + 4 pg = 14 total pages, 7 duplex sheets)', () => {
   const attachmentAPages = 10;
   const attachmentBPages = 4;
   const totalPages = attachmentAPages + attachmentBPages; // 14 pages
@@ -217,7 +217,7 @@ test('Multiple attachments total page pricing (10 pg + 4 pg = 14 total pages)', 
 
   const duplex = calculatePrice({ pages: totalPages, copies: 1, printType: 'bw', print_sides: 'duplex', shop: duplexShop });
   assertEqual(duplex.printedSheets, 7, '14 pages duplex = 7 sheets');
-  assertEqual(duplex.printCost, 21.00, '14 pages @ ₹1.50 = ₹21.00');
+  assertEqual(duplex.printCost, 10.50, '7 sheets @ ₹1.50 = ₹10.50');
 });
 
 test('Multiple copies multiplier (100 pages, 5 copies duplex B&W @ ₹1.50)', () => {
@@ -228,9 +228,9 @@ test('Multiple copies multiplier (100 pages, 5 copies duplex B&W @ ₹1.50)', ()
     print_sides: 'duplex',
     shop: duplexShop,
   });
-  // 100 pages * 5 copies = 500 total page prints @ 1.50 = ₹750.00
+  // 50 sheets * 5 copies = 250 sheets @ 1.50 = ₹375.00
   assertEqual(result.printedSheets, 50, 'printedSheets per copy');
-  assertEqual(result.printCost, 750.00, 'printCost for 5 copies');
+  assertEqual(result.printCost, 375.00, 'printCost for 5 copies');
 });
 
 console.log(`\nResults: ${passed} passed, ${failed} failed.`);

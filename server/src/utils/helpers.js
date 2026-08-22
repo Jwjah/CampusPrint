@@ -120,7 +120,7 @@ const calculatePrice = ({ pages, copies, printType, layout, print_sides, printSi
   const printedSheets = resolvedSides === 'duplex' ? Math.ceil(effectivePages / 2) : effectivePages;
   const numCopies = parseInt(copies) || 1;
 
-  const printCost = effectivePages * numCopies * price_printing_mode_used;
+  const printCost = printedSheets * numCopies * price_printing_mode_used;
 
   // Resolve binding/finishing option type
   let resolvedBindingType = (binding_type || 'none').toLowerCase();
